@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "chromadb>=0.5.0",
     "google-generativeai>=0.8.6",
+    "keyring>=25.7.0",
     "langchain>=0.2.0",
     "langchain-chroma>=1.1.0",
     "langchain-community>=0.2.0",
