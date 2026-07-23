@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 
 DATA_PATH = "./data"
 DB_PATH = "./chroma_db"
-MANIFEST_PATH = "./.data_manifest.json"
+MANIFEST_PATH = "./chroma_db/.data_manifest.json"
 
 def get_data_fingerprint() -> str:
     """Generate a combined hash of all files in DATA_PATH based on their content and modification time."""
