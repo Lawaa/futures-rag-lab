@@ -1,6 +1,7 @@
 import os
+import sys
 import keyring
-import google.generativeai as genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 SERVICE_NAME = "futures-rag-lab"
 KEY_NAME = "GEMINI_API_KEY"
@@ -37,10 +38,13 @@ def prompt_and_save_api_key(reason: str | None = None) -> str:
         print("❌ API key cannot be empty. Please try again.")
 
 def validate_api_key(api_key: str) -> bool:
-    """Test API key validity using a lightweight model listing call."""
+    """Test API key validity using a dummy LLM invocation without deprecated SDKs."""
     try:
-        genai.configure(api_key=api_key)
-        list(genai.list_models())
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-3.5-flash-lite",
+            google_api_key=api_key
+        )
+        llm.invoke("ping")
         return True
     except Exception:
         return False
