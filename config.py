@@ -15,7 +15,7 @@ def delete_stored_api_key() -> None:
     """Delete stored API key from the system keyring."""
     try:
         keyring.delete_password(SERVICE_NAME, KEY_NAME)
-        print("🗑️ Stored API key removed from system keyring.")
+        print("🗑️ Stored API key removed from system credential storage.")
     except keyring.errors.PasswordDeleteError:
         pass
 

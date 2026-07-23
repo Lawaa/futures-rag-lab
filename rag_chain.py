@@ -1,4 +1,5 @@
 import sys
+import os
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -10,13 +11,20 @@ from config import get_valid_api_key, delete_stored_api_key
 
 DB_PATH = "./chroma_db"
 
-def get_rag_chain():
-    # Dynamically retrieve and validate the API key (prompts user if missing/invalid)
-    api_key = get_valid_api_key()
-
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+def get_retriever():
+    """Initialize vector database retriever with Maximum Marginal Relevance (MMR)."""
+    embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
     vector_db = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
-    retriever = vector_db.as_retriever(search_kwargs={"k": 3})
+    
+    # Using MMR to fetch diverse relevant context
+    return vector_db.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": 4, "fetch_k": 10, "lambda_mult": 0.7}
+    )
+
+def get_rag_chain(retriever):
+    """Construct and return the execution chain."""
+    api_key = get_valid_api_key()
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-3.5-flash-lite",
@@ -45,16 +53,13 @@ Answer:"""
 
     return chain
 
-def invoke_chain_safely(chain, question: str) -> str:
-    """Helper function to execute the chain and handle runtime API authentication errors."""
-    try:
-        return chain.invoke(question)
-    except Exception as e:
-        error_msg = str(e)
-        if "401" in error_msg or "UNAUTHENTICATED" in error_msg or "API_KEY_INVALID" in error_msg or "NOT_FOUND" in error_msg:
-            print("\n❌ Invalid or expired API key detected during runtime.")
-            delete_stored_api_key()
-            print("Please restart the application to enter a valid API key.")
-            sys.exit(1)
-        else:
-            raise e
+def handle_api_error(e: Exception) -> None:
+    """Check for auth/not-found runtime errors and clear invalid keys."""
+    error_msg = str(e)
+    if any(code in error_msg for code in ["401", "UNAUTHENTICATED", "API_KEY_INVALID", "NOT_FOUND"]):
+        print("\n❌ Runtime Authentication/Model Error detected.")
+        delete_stored_api_key()
+        print("Please restart the application to enter a valid API key.")
+        sys.exit(1)
+    else:
+        raise e
