@@ -1,0 +1,33 @@
+# Futures & Financial Trading Glossary
+
+## Spot Contract
+A spot contract is an agreement to buy or sell a financial instrument, commodity, or currency for immediate delivery and settlement on the spot date (usually within 1 to 2 business days). Spot transactions occur in the spot market and are not traded on standardized futures exchanges.
+
+## Futures Contract
+A futures contract is a standardized, legally binding agreement to buy or sell a specific quantity of a commodity or financial instrument at a predetermined price on a specified future date. Futures contracts are traded on regulated exchanges (such as CME) and require daily settlement (mark-to-market).
+
+## Forward Contract
+A forward contract is a non-standardized, customized agreement between two private parties to buy or sell an asset at a specified price on a future date. Unlike futures, forward contracts are traded over-the-counter (OTC) and carry higher counterparty credit risk.
+
+## Foreign Exchange (Forex)
+Foreign Exchange (Forex or FX) is the global decentralized market for the trading of currencies. It includes all aspects of buying, selling, and exchanging currencies at current or determined prices.
+
+## Initial Margin
+Initial margin is the minimum amount of equity or collateral required by an exchange or broker to open a new leveraged futures position. It acts as a performance bond.
+
+## Maintenance Margin
+Maintenance margin is the minimum amount of equity that an investor must maintain in their margin account at all times after opening a position. If account equity falls below this threshold, a margin call is triggered.
+
+## Margin Call & How to Avoid It
+A margin call is a demand from a broker to deposit additional funds or liquidate positions when account equity falls below the maintenance margin level.
+Traders can avoid margin calls by:
+1. Maintaining adequate excess capital in the trading account.
+2. Using strict stop-loss orders to limit loss per trade.
+3. Managing position sizing and leverage appropriately.
+4. Monitoring open positions continuously.
+
+## Mark-to-Market (MTM)
+Mark-to-market is the daily accounting process where open futures positions are revalued based on the current market settlement price. Gains are credited and losses are debited from the trader's account equity at the end of each trading day.
+
+## Leverage
+Leverage allows a trader to control a large nominal position using a relatively small amount of capital (margin). While leverage amplifies potential profits, it equally amplifies potential losses.
