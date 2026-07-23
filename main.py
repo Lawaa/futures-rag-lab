@@ -1,7 +1,7 @@
 import os
 import sys
 import shutil
-from ingest import build_vector_db
+from ingest import build_vector_db, is_data_changed
 from rag_chain import get_retriever, get_rag_chain, handle_api_error
 
 DB_PATH = "./chroma_db"
@@ -11,15 +11,24 @@ def main():
     print("📈 Modern SOTA Futures Trading RAG Assistant")
     print("=" * 50)
 
-    # 1. Check if vector database exists
-    if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
-        print("🔍 Vector database not found. Building database...")
+    # 1. Check if vector database exists or if data directory content has changed
+    db_exists = os.path.exists(DB_PATH) and os.listdir(DB_PATH)
+    data_changed = is_data_changed()
+
+    if not db_exists or data_changed:
+        if data_changed and db_exists:
+            print("🔄 Detected changes in the './data' directory (new, updated, or removed files).")
+            print("🧹 Re-building vector database...")
+            shutil.rmtree(DB_PATH, ignore_errors=True)
+        else:
+            print("🔍 Vector database not found. Building database...")
+
         success = build_vector_db()
         if not success:
-            print("❌ Ingestion failed. Please place PDF files in the './data' directory and try again.")
+            print("❌ Ingestion failed. Please place data files in the './data' directory and try again.")
             sys.exit(1)
     else:
-        print("✅ Vector database found.")
+        print("✅ Vector database up to date.")
 
     # 2. Try loading retriever; auto-rebuild if embedding dimension mismatch occurs
     try:
@@ -45,6 +54,7 @@ def main():
 
     # 3. Interactive CLI Loop
     print("\n🤖 Assistant is ready! Type 'exit' or 'quit' to stop.\n")
+    session_config = {"configurable": {"session_id": "default_session"}}
     
     while True:
         try:
@@ -60,7 +70,7 @@ def main():
             source_docs = retriever.invoke(query)
             
             print("\n💡 Answer:")
-            for chunk in chain.stream(query):
+            for chunk in chain.stream({"question": query}, config=session_config):
                 print(chunk, end="", flush=True)
             print("\n")
 
