@@ -1,8 +1,8 @@
 import os
 import sys
 import shutil
-from ingest import build_vector_db, is_data_changed
-from rag_chain import get_retriever, get_rag_chain, handle_api_error
+from src.ingest import build_vector_db, is_data_changed
+from src.rag_chain import get_retriever, get_rag_chain, handle_api_error
 
 DB_PATH = "./chroma_db"
 

@@ -8,7 +8,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.output_parsers import StrOutputParser
 
-from config import get_valid_api_key, delete_stored_api_key
+from .config import get_valid_api_key, delete_stored_api_key
 
 DB_PATH = "./chroma_db"
 store = {}
