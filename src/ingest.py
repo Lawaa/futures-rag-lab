@@ -1,89 +1,82 @@
-import os
-import glob
-import json
-import hashlib
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+"""Document ingestion pipeline: load, chunk, embed and persist to ChromaDB."""
+
+from __future__ import annotations
+
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import (
+    DirectoryLoader,
+    PyPDFLoader,
+    TextLoader,
+)
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-DATA_PATH = "./data"
-DB_PATH = "./chroma_db"
-MANIFEST_PATH = "./chroma_db/.data_manifest.json"
+from .embeddings import build_embeddings
+from .logging_config import get_logger
+from .manifest import save_manifest
+from .settings import Settings
 
-def get_data_fingerprint() -> str:
-    """Generate a combined hash of all files in DATA_PATH based on their content and modification time."""
-    if not os.path.exists(DATA_PATH):
-        return ""
-    
-    files = sorted(glob.glob(os.path.join(DATA_PATH, "*")))
-    fingerprint_data = []
+logger = get_logger(__name__)
 
-    for filepath in files:
-        if os.path.isfile(filepath):
-            stat = os.stat(filepath)
-            # Combine filename, size, and last modified timestamp
-            fingerprint_data.append(f"{os.path.basename(filepath)}:{stat.st_size}:{stat.st_mtime}")
 
-    combined_str = "|".join(fingerprint_data)
-    return hashlib.md5(combined_str.encode("utf-8")).hexdigest()
+def _load_documents(settings: Settings) -> list[Document]:
+    """Load every supported document (PDF, TXT, MD) from the data directory."""
+    text_kwargs = {"encoding": "utf-8"}
+    loaders = [
+        DirectoryLoader(str(settings.data_path), glob="**/*.pdf", loader_cls=PyPDFLoader),
+        DirectoryLoader(
+            str(settings.data_path), glob="**/*.txt", loader_cls=TextLoader, loader_kwargs=text_kwargs
+        ),
+        DirectoryLoader(
+            str(settings.data_path), glob="**/*.md", loader_cls=TextLoader, loader_kwargs=text_kwargs
+        ),
+    ]
 
-def is_data_changed() -> bool:
-    """Check if the data directory has changed compared to the stored manifest."""
-    current_fingerprint = get_data_fingerprint()
-    if not os.path.exists(MANIFEST_PATH):
-        return True
-    
-    try:
-        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-            stored_data = json.load(f)
-            return stored_data.get("fingerprint") != current_fingerprint
-    except Exception:
-        return True
+    documents: list[Document] = []
+    for loader in loaders:
+        documents.extend(loader.load())
+    return documents
 
-def save_manifest() -> None:
-    """Save the current data fingerprint to disk."""
-    current_fingerprint = get_data_fingerprint()
-    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
-        json.dump({"fingerprint": current_fingerprint}, f, indent=2)
 
-def build_vector_db() -> bool:
-    print("📁 Loading documents (PDF, TXT, MD) from data directory...")
-    if not os.path.exists(DATA_PATH) or not os.listdir(DATA_PATH):
-        print(f"⚠️ Warning: '{DATA_PATH}' directory is empty or missing. Please add data files.")
+def _split_documents(documents: list[Document], settings: Settings) -> list[Document]:
+    """Split documents into overlapping chunks for retrieval."""
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
+    )
+    return splitter.split_documents(documents)
+
+
+def build_vector_db(settings: Settings) -> bool:
+    """Ingest the data directory into ChromaDB.
+
+    Returns ``True`` on success, ``False`` when there is nothing to ingest.
+    """
+    if not settings.data_path.exists() or not any(settings.data_path.iterdir()):
+        logger.warning("Data directory '%s' is empty or missing.", settings.data_path)
         return False
 
-    pdf_loader = DirectoryLoader(DATA_PATH, glob="**/*.pdf", loader_cls=PyPDFLoader)
-    txt_loader = DirectoryLoader(DATA_PATH, glob="**/*.txt", loader_cls=TextLoader, loader_kwargs={"encoding": "utf-8"})
-    md_loader = DirectoryLoader(DATA_PATH, glob="**/*.md", loader_cls=TextLoader, loader_kwargs={"encoding": "utf-8"})
+    logger.info("Loading documents (PDF, TXT, MD) from '%s'...", settings.data_path)
+    documents = _load_documents(settings)
+    logger.info("Loaded %d document source pages/files.", len(documents))
 
-    docs = []
-    docs.extend(pdf_loader.load())
-    docs.extend(txt_loader.load())
-    docs.extend(md_loader.load())
+    if not documents:
+        logger.warning("No supported documents found in '%s'.", settings.data_path)
+        return False
 
-    print(f"📄 Loaded {len(docs)} total document source pages/files.")
+    chunks = _split_documents(documents, settings)
+    logger.info("Created %d text chunks.", len(chunks))
 
-    print("✂️ Splitting documents into chunks...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,
-        chunk_overlap=200
+    logger.info(
+        "Generating embeddings with '%s' and persisting to ChromaDB...",
+        settings.embedding_model,
     )
-    chunks = text_splitter.split_documents(docs)
-    print(f"🧩 Created {len(chunks)} text chunks.")
-
-    print("🧠 Generating embeddings with BAAI/bge-small-en-v1.5 and saving to ChromaDB...")
-    embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-
     Chroma.from_documents(
         documents=chunks,
-        embedding=embeddings,
-        persist_directory=DB_PATH
+        embedding=build_embeddings(settings),
+        persist_directory=str(settings.db_path),
     )
-    
-    save_manifest()
-    print(f"✅ Successfully indexed {len(chunks)} chunks into '{DB_PATH}'!\n")
-    return True
 
-if __name__ == "__main__":
-    build_vector_db()
+    save_manifest(settings)
+    logger.info("Successfully indexed %d chunks into '%s'.", len(chunks), settings.db_path)
+    return True
