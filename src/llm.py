@@ -74,8 +74,11 @@ def check_llm_available(settings: Settings, api_key: str | None = None) -> tuple
         build_llm(settings, api_key).invoke("ping")
         return True, None
     except Exception as error:
-        return False, str(error)
-
+        import traceback
+        traceback.print_exc()  # full detail to server console/logs only
+        if is_authentication_error(error):
+            return False, "Invalid or missing API key."
+        return False, "The language model is currently unavailable."
 
 def is_authentication_error(error: Exception) -> bool:
     """Detect authentication/model-not-found errors from the provider."""
