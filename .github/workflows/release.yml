@@ -1,0 +1,114 @@
+name: Release Desktop App
+
+# Build cross-platform installers and attach them to a GitHub Release.
+#
+# Trigger by pushing a version tag (e.g. `git tag v0.1.0 && git push --tags`)
+# or manually from the Actions tab. Each job:
+#   1. Freezes the Python backend into a self-contained sidecar (PyInstaller).
+#   2. Bundles it inside a Tauri app and produces the native installer.
+#   3. Uploads the installer to a (draft) GitHub Release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0)"
+        required: true
+        default: "v0.0.0-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon
+            args: "--target aarch64-apple-darwin"
+            rust-target: aarch64-apple-darwin
+          - platform: macos-latest # Intel
+            args: "--target x86_64-apple-darwin"
+            rust-target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            args: ""
+            rust-target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libssl-dev \
+            patchelf \
+            build-essential
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache Cargo build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python (uv)
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies (incl. PyInstaller)
+        run: uv sync --dev
+
+      - name: Put the project virtualenv on PATH (Unix)
+        if: matrix.platform != 'windows-latest'
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Put the project virtualenv on PATH (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: Add-Content -Path $env:GITHUB_PATH -Value "$PWD\.venv\Scripts"
+
+      - name: Install Tauri CLI
+        working-directory: desktop
+        run: npm install
+
+      - name: Generate app icons from the committed source
+        working-directory: desktop
+        run: npx tauri icon app-icon.png
+
+      - name: Build installers and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "Futures Trading Assistant ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: "Automated build. Download the installer for your platform below."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

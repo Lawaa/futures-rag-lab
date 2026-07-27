@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Háttér -->
+  <rect width="1024" height="1024" fill="#132b63" />
+  
+  <!-- Középső panel -->
+  <rect x="200" y="200" width="624" height="624" rx="120" fill="#2c539e" />
+  
+  <!-- Sárga könyv -->
+  <g>
+    <rect x="270" y="290" width="450" height="100" rx="35" fill="#ffc300" />
+    <rect x="290" y="310" width="30" height="60" rx="15" fill="#e6ad00" />
+    <rect x="700" y="290" width="50" height="100" rx="25" fill="#ffe17d" />
+  </g>
+  
+  <!-- Zöld könyv -->
+  <g>
+    <rect x="320" y="410" width="450" height="100" rx="35" fill="#00e676" />
+    <rect x="340" y="430" width="30" height="60" rx="15" fill="#00b359" />
+    <rect x="750" y="410" width="50" height="100" rx="25" fill="#80ffba" />
+  </g>
+  
+  <!-- Kék könyv -->
+  <g>
+    <rect x="280" y="530" width="450" height="100" rx="35" fill="#29b6f6" />
+    <rect x="300" y="550" width="30" height="60" rx="15" fill="#0288d1" />
+    <rect x="710" y="530" width="50" height="100" rx="25" fill="#b3e5fc" />
+  </g>
+  
+  <!-- Polc/Alap -->
+  <rect x="280" y="660" width="480" height="30" rx="15" fill="#1e3d78" />
+</svg>

@@ -11,3 +11,4 @@ wheels/
 
 # Database
 chroma_db/
+.chroma_db/
