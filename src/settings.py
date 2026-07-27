@@ -32,12 +32,21 @@ class Settings(BaseSettings):
     # --- Embeddings ----------------------------------------------------------
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5")
 
+    # --- Interface language --------------------------------------------------
+    # Language used for assistant answers and the user interface (CLI/Web).
+    language: Literal["en", "hu"] = Field(default="en")
+
     # --- Language model ------------------------------------------------------
     # Choose the backend: hosted Google Gemini or a local Ollama server.
     llm_provider: Literal["gemini", "ollama"] = Field(default="gemini")
     gemini_model: str = Field(default="gemini-3.5-flash-lite")
     ollama_model: str = Field(default="qwen2.5:7b")
     ollama_base_url: str = Field(default="http://localhost:11434")
+
+    # --- Rate limiting -------------------------------------------------------
+    # Optional client-side throttle shared by every LLM call to stay under
+    # provider quotas (e.g. Gemini free-tier RPM). 0 disables throttling.
+    llm_requests_per_minute: int = Field(default=0, ge=0)
 
     # --- Chunking ------------------------------------------------------------
     chunk_size: int = Field(default=1200, gt=0)
@@ -47,6 +56,44 @@ class Settings(BaseSettings):
     retriever_k: int = Field(default=6, gt=0, description="Number of documents returned.")
     retriever_fetch_k: int = Field(default=20, gt=0, description="Candidate pool size for MMR.")
     retriever_lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    # --- Cross-lingual retrieval & self-correction ---------------------------
+    # Search queries are always translated into this corpus language so a
+    # question asked in any language can still match the stored documents.
+    retrieval_language: Literal["en", "hu"] = Field(default="en")
+    # When enabled, retrieved documents are graded for relevance and the query
+    # is rewritten (up to ``max_retrieval_retries`` times) if they are not.
+    enable_self_correction: bool = Field(default=True)
+    max_retrieval_retries: int = Field(
+        default=3, ge=0, description="Max query rewrites when documents are irrelevant."
+    )
+    # After generation, verify the answer is grounded in the retrieved context
+    # (Self-RAG / CRAG). Ungrounded answers are labelled and lose their (false)
+    # local-document citations.
+    enable_groundedness_check: bool = Field(default=True)
+
+    # --- Multi-query retrieval (fan-out + reranking) -------------------------
+    # Generate several query variants, retrieve for each in parallel and fuse the
+    # ranked lists with Reciprocal Rank Fusion for broader, more robust recall.
+    enable_multi_query: bool = Field(default=False)
+    multi_query_count: int = Field(
+        default=3, ge=1, le=8, description="Number of query variants to fan out to."
+    )
+
+    # --- Durable graph state -------------------------------------------------
+    # Persist the retrieval graph's per-conversation state with a LangGraph
+    # SQLite checkpointer so turns are durable and resumable across restarts.
+    enable_checkpointing: bool = Field(default=True)
+
+    # --- Multi-business profiles / tenant routing ----------------------------
+    # Optional JSON file defining named profiles (persona + system prompt) so a
+    # single build can serve different businesses. Absent file => one default.
+    profiles_path: Path = Field(default=Path("./profiles.json"))
+    # Active profile for this deployment (used when routing is off).
+    profile: str = Field(default="default")
+    # When on and multiple profiles exist, classify each question and route it
+    # to the best-matching profile's system prompt.
+    enable_profile_routing: bool = Field(default=False)
 
     # --- API server ----------------------------------------------------------
     api_host: str = Field(default="127.0.0.1")
@@ -58,9 +105,24 @@ class Settings(BaseSettings):
         return self.db_path / ".data_manifest.json"
 
     @property
+    def conversations_db_path(self) -> Path:
+        """Location of the persistent conversation history database."""
+        return self.db_path / "conversations.sqlite3"
+
+    @property
+    def graph_checkpoint_path(self) -> Path:
+        """Location of the LangGraph SQLite checkpoint database."""
+        return self.db_path / "graph_checkpoints.sqlite3"
+
+    @property
     def uses_gemini(self) -> bool:
         """Whether the hosted Gemini backend (and thus an API key) is in use."""
         return self.llm_provider == "gemini"
+
+    @property
+    def is_hungarian(self) -> bool:
+        """Whether the interface and answers should be in Hungarian."""
+        return self.language == "hu"
 
     @property
     def active_model(self) -> str:

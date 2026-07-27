@@ -36,6 +36,10 @@ class RetrievalResult:
 
     standalone_question: str
     documents: list[Document] = field(default_factory=list)
+    # Number of self-correction query rewrites performed to reach this result.
+    retry_count: int = 0
+    # Profile the retrieval graph routed this turn to (None => active profile).
+    profile_id: str | None = None
 
     @property
     def sources(self) -> list[Source]:
@@ -48,7 +52,13 @@ class RetrievalResult:
 
 @dataclass(frozen=True)
 class Answer:
-    """A generated answer together with its supporting sources."""
+    """A generated answer together with its supporting sources.
+
+    ``grounded`` is ``False`` when the answer relies on knowledge outside the
+    loaded documents; in that case ``sources`` is empty so the UI never shows
+    citations that did not actually support the answer.
+    """
 
     text: str
     sources: list[Source] = field(default_factory=list)
+    grounded: bool = True

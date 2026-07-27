@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for the Futures Trading Assistant desktop shell.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:webview:allow-navigate",
+    "opener:default",
+    "opener:allow-open-path",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "binaries/rag-backend", "sidecar": true }]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/rag-backend", "sidecar": true }]
+    }
+  ]
+}

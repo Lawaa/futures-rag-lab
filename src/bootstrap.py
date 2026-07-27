@@ -6,7 +6,12 @@ Shared by every interface (CLI, API) so wiring lives in exactly one place.
 from __future__ import annotations
 
 import shutil
+import sqlite3
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+from .conversation_store import ConversationStore
 from .ingest import build_vector_db
 from .llm import build_llm
 from .logging_config import get_logger
@@ -17,6 +22,24 @@ from .vector_store import build_retriever
 
 
 logger = get_logger(__name__)
+
+
+def _build_checkpointer(settings: Settings) -> BaseCheckpointSaver | None:
+    """Create a durable SQLite checkpointer for the retrieval graph.
+
+    Returns ``None`` when checkpointing is disabled, keeping graph state purely
+    in-memory (the default for tests and ephemeral runs).
+    """
+    if not settings.enable_checkpointing:
+        return None
+    settings.db_path.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(
+        settings.graph_checkpoint_path, check_same_thread=False
+    )
+    saver = SqliteSaver(connection)
+    saver.setup()
+    logger.info("Graph checkpointing enabled at %s.", settings.graph_checkpoint_path)
+    return saver
 
 
 def ensure_vector_db(settings: Settings) -> bool:
@@ -55,4 +78,12 @@ def build_service(settings: Settings, api_key: str | None = None) -> RagService:
             raise
         retriever = build_retriever(settings)
 
-    return RagService(llm=llm, retriever=retriever, settings=settings)
+    store = ConversationStore(settings.conversations_db_path)
+    checkpointer = _build_checkpointer(settings)
+    return RagService(
+        llm=llm,
+        retriever=retriever,
+        settings=settings,
+        store=store,
+        checkpointer=checkpointer,
+    )

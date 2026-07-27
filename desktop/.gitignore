@@ -1,0 +1,19 @@
+# --- Rust / Tauri build outputs ---
+src-tauri/target/
+src-tauri/gen/
+
+# Generated application icons (produced by `npm run tauri icon`)
+src-tauri/icons/*.png
+src-tauri/icons/*.ico
+src-tauri/icons/*.icns
+src-tauri/icons/*.svg
+
+# Bundled backend sidecar binaries (produced by build_backend.py)
+src-tauri/binaries/rag-backend*
+
+# Node / Tauri CLI
+node_modules/
+
+# PyInstaller intermediate output (created at repo root during backend build)
+build/
+dist/

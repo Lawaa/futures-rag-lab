@@ -1,0 +1,5 @@
+# Placeholder so the sidecar output directory is tracked by Git.
+#
+# The compiled backend binary is produced by `python scripts/build_backend.py`
+# and copied here as `rag-backend-<target-triple>[.exe]`. Those artifacts are
+# build outputs and are intentionally NOT committed (see ../../.gitignore).

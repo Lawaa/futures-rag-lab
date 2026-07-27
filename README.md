@@ -13,8 +13,20 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with **`uv`
 - **Credential Management:** OS-native keyring (`keyring`) - no plain text `.env` files required
 - **Multi-Format Ingestion:** Auto-loads `.pdf`, `.txt`, and `.md` files from `./data`
 - **Smart Data Auto-Sync:** Automated change detection via `.data_manifest.json` fingerprinting
+- **LangGraph Orchestration:** The retrieval stage runs as a compiled LangGraph state machine with conditional routing and a bounded self-correction loop
+- **Cross-Lingual Retrieval:** Every question is rewritten into the corpus language (using canonical domain terminology) before searching, so a Hungarian question still matches English documents (and vice-versa)
+- **Self-Correction & Quality Loop:** Retrieved documents are graded for relevance; if they are irrelevant the query is rewritten and retried (up to `RAG_MAX_RETRIEVAL_RETRIES`, default 3)
+- **Answer Groundedness Check (Self-RAG / CRAG):** Generated answers are verified against the retrieved context; ungrounded answers are labelled and stripped of (false) local citations
+- **Multi-Query Fan-Out + Rerank (optional):** Expands each query into several variants, retrieves them in parallel and fuses the results with Reciprocal Rank Fusion for broader recall (`RAG_ENABLE_MULTI_QUERY`)
+- **Profiles / Multi-Tenant Routing (optional):** Serve several businesses from one app — each profile has its own system prompt, and questions can be auto-routed to the best-matching profile (`RAG_ENABLE_PROFILE_ROUTING`)
+- **Live Pipeline Progress:** The web UI streams each retrieval stage (routing → preparing → retrieving → grading → answering) so users see what the assistant is doing
+- **Durable, Resumable State:** The retrieval graph persists per-conversation state via a LangGraph SQLite checkpointer (`RAG_ENABLE_CHECKPOINTING`, default on)
 - **Contextual Memory & Query Rewriting:** Reformulates ambiguous follow-up questions using chat history
+- **Rate-Limit Friendly:** One LLM instance is shared across every graph step, generation never triggers a second retrieval pass, and an optional client-side throttle (`RAG_LLM_REQUESTS_PER_MINUTE`) keeps you under provider quotas
+- **Persistent Conversations:** Remembers your last 15 conversations - resume any of them or delete old ones from the web UI sidebar (stored locally in SQLite)
 - **Controlled Fallback:** Grounded answers strictly based on documents, with explicit notice when defaulting to general financial knowledge
+- **Bilingual:** Full **English** and **Hungarian** support for both the assistant's answers and the interface
+- **Unified Guided Startup:** A single `uv run main.py` wizard picks language, model backend, API key, and interface (web or CLI)
 - **Dual Interface:** Interactive CLI *and* a FastAPI HTTP service sharing the same core logic
 - **Clean, Layered Architecture:** Centralized typed settings, dependency-injected services, and a pytest test suite
 
@@ -29,14 +41,43 @@ The code is organized into small, single-responsibility layers under `src/`:
 | `settings.py` | Centralized, typed configuration (env-overridable via `RAG_*`) |
 | `credentials.py` | Secure API-key storage in the OS keyring |
 | `llm.py` / `embeddings.py` / `vector_store.py` | Model & retriever factories |
-| `manifest.py` / `ingest.py` | Change detection and the document ingestion pipeline |
-| `prompts.py` / `models.py` | Prompt templates and domain data models |
-| `rag_service.py` | `RagService` orchestration (rephrase -> retrieve -> answer) |
-| `bootstrap.py` | Wires settings, DB and service together |
-| `cli.py` / `api.py` | Interactive CLI and FastAPI interfaces |
+| `manifest.py` / `ingest.py` | Change detection and the document ingestion pipeline (native `pypdf` + text loaders) |
+| `prompts.py` / `models.py` | Prompt templates (EN/HU: search, grade, rewrite, answer, groundedness, routing, multi-query) and domain data models |
+| `profiles.py` | Business/tenant profiles: per-profile system prompts and optional auto-routing |
+| `i18n.py` | User-facing text catalog for English and Hungarian |
+| `conversation_store.py` | Persistent SQLite store for the last 15 conversations |
+| `graph.py` | LangGraph retrieval pipeline: (route) -> cross-lingual query prep -> (multi-query expand) -> retrieve -> grade -> rewrite loop, with an optional SQLite checkpointer |
+| `rag_service.py` | `RagService` orchestration (LangGraph retrieval -> groundedness-checked, streamed answer) |
+| `bootstrap.py` | Wires settings, DB, checkpointer and service together |
+| `cli.py` / `api.py` | Unified startup wizard + interactive CLI, and the FastAPI interface |
 
 Configuration can be overridden through environment variables (or a `.env` file),
-e.g. `RAG_GEMINI_MODEL`, `RAG_RETRIEVER_K`, `RAG_CHUNK_SIZE`, `RAG_API_PORT`.
+e.g. `RAG_LANGUAGE`, `RAG_GEMINI_MODEL`, `RAG_RETRIEVER_K`, `RAG_CHUNK_SIZE`, `RAG_API_PORT`,
+`RAG_RETRIEVAL_LANGUAGE`, `RAG_ENABLE_SELF_CORRECTION`, `RAG_MAX_RETRIEVAL_RETRIES`,
+`RAG_ENABLE_GROUNDEDNESS_CHECK`, `RAG_ENABLE_MULTI_QUERY`, `RAG_MULTI_QUERY_COUNT`,
+`RAG_ENABLE_PROFILE_ROUTING`, `RAG_PROFILES_PATH`, `RAG_ENABLE_CHECKPOINTING`,
+`RAG_LLM_REQUESTS_PER_MINUTE`.
+
+### Retrieval pipeline (LangGraph)
+
+Each turn is orchestrated by a compiled LangGraph state machine. Query preparation
+folds contextualization *and* translation into a single LLM call, and grading uses
+one call for the whole document set, so a typical turn stays at three LLM calls
+(prepare → grade → answer) even with self-correction enabled:
+
+```mermaid
+flowchart LR
+    A[Question] --> B[prepare_query<br/>contextualize + translate]
+    B --> C[retrieve]
+    C --> D{grade<br/>relevant?}
+    D -- yes --> E[Answer + sources]
+    D -- no, retries left --> F[rewrite_query]
+    F --> C
+    D -- no, budget spent --> E
+```
+
+Generation is intentionally kept outside the graph so the API can show sources
+first and stream the answer without paying for a second retrieval pass.
 
 ---
 
@@ -72,7 +113,7 @@ export RAG_OLLAMA_MODEL=qwen2.5:7b         # any pulled model tag
 export RAG_OLLAMA_BASE_URL=http://localhost:11434  # default
 
 # 3. Run as usual
-uv run main.py          # or: uv run serve.py
+uv run main.py
 
 ```
 
@@ -120,21 +161,32 @@ uv run main.py
 
 ```
 
+This starts the **guided setup wizard**, which asks, in order:
+
+1. **Language** - English or Hungarian (Magyar).
+2. **Model backend** - hosted **Google Gemini** or a **local Ollama** model.
+3. **API key** - only when Gemini is chosen and no stored key is found.
+4. **Interface** - the browser **Web UI** or the **command line**.
+
+Your choices drive everything from there, so `uv run main.py` is the single entry
+point for both the web UI and the terminal chat.
+
 ---
 
-## 🌐 Run as an HTTP API (FastAPI)
+## 🌐 Run as an HTTP API (FastAPI) directly
 
-The same assistant is available as a FastAPI service:
+Choosing **Web UI** in the wizard launches the FastAPI service for you. To start
+the server directly (e.g. for deployment), run the ASGI app with `uvicorn`:
 
 ```bash
-uv run serve.py
+uv run uvicorn src.api:app --host 127.0.0.1 --port 8000
 
 ```
 
 Then open **`http://127.0.0.1:8000`** in a browser for the built-in chat web UI - a
 clean, no-setup interface designed for non-technical users (suggested questions,
-streaming-style typing indicator, sources shown per answer, and a "New chat"
-button). Interactive API docs are at `http://127.0.0.1:8000/docs`.
+live pipeline-progress indicator, streaming answers, sources shown per answer, and
+a "New chat" button). Interactive API docs are at `http://127.0.0.1:8000/docs`.
 
 Key endpoints:
 
@@ -142,8 +194,16 @@ Key endpoints:
 | --- | --- | --- |
 | `GET` | `/` | Browser chat web UI |
 | `GET` | `/health` | Liveness probe |
-| `POST` | `/chat` | Answer a question, returns `{ answer, sources }` |
+| `GET` | `/config` | Runtime settings + readiness for the web UI (language, provider, setup state) |
+| `POST` | `/config/api-key` | Store a Gemini API key at runtime and make the assistant ready |
+| `POST` | `/chat` | Answer a question, returns `{ answer, sources, grounded }` |
 | `POST` | `/chat/stream` | Stream the answer token-by-token (plain text) |
+| `POST` | `/chat/events` | Stream the whole turn as newline-delimited JSON progress events (status → token → done) |
+| `GET` | `/conversations` | List the last 15 saved conversations |
+| `GET` | `/conversations/{id}` | Fetch a conversation's messages (to resume it) |
+| `PATCH` | `/conversations/{id}` | Rename a saved conversation |
+| `PATCH` | `/conversations/{id}/pin` | Pin/unpin a conversation so it survives auto-pruning |
+| `DELETE` | `/conversations/{id}` | Permanently delete a saved conversation |
 | `DELETE` | `/sessions/{session_id}` | Clear a conversation's history |
 
 ```bash
@@ -153,7 +213,35 @@ curl -X POST http://127.0.0.1:8000/chat\
 
 ```
 
-> 💡 The API reads the Gemini key from `GEMINI_API_KEY` or the keyring. Run the CLI once (or set the env var) to store it before starting the server.
+> 💡 The API reads the Gemini key from `GEMINI_API_KEY` or the keyring. Run the CLI once (or set the env var) to store it before starting the server. When launched without a key, the server now starts anyway and the web UI shows a one-time setup panel to enter it.
+
+---
+
+## 🖥️ Desktop App & Cross-Platform Installers
+
+The app can be packaged into native installers (Windows, macOS, Linux) using a
+[Tauri](https://tauri.app/) shell that bundles the Python backend as a
+self-contained sidecar. End users install a single file — no Python, `uv`, or
+dependencies required — which solves the "different environments" problem.
+
+- **Add/expand the knowledge base after install:** documents live in an open,
+  user-writable folder (e.g. `%APPDATA%\FuturesTradingAssistant\data` on
+  Windows, `~/Library/Application Support/FuturesTradingAssistant/data` on
+  macOS). Drop in `.pdf`/`.txt`/`.md` files and restart — the app re-indexes
+  automatically. A **File → Open Data Folder** menu opens it directly.
+- **The application code stays hidden** inside the frozen executable; only the
+  data folder is exposed.
+- **Automated GitHub Releases:** push a `v*` tag to build and publish installers
+  for all platforms via `.github/workflows/release.yml`.
+
+Everything lives in the separate [`desktop/`](desktop) folder. See
+[docs/DESKTOP.md](docs/DESKTOP.md) for the full build-and-release guide.
+
+```bash
+# Build an installer locally (requires Rust, Node, and Tauri prerequisites)
+uv sync --dev
+cd desktop && npm install && npm run tauri icon app-icon.png && npm run tauri build
+```
 
 ---
 
@@ -163,6 +251,18 @@ curl -X POST http://127.0.0.1:8000/chat\
 uv run pytest
 
 ```
+
+---
+
+## 🔧 Repurposing for another domain
+
+This app is domain-agnostic — the trading content is just the sample data. To
+turn it into a knowledge base for a **different business** (e.g. a law firm or a
+healthcare provider), or to serve several businesses from one white-label build,
+follow [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md). In short: swap the
+documents in `./data`, set a persona via `profiles.json`, update the web-UI
+strings, and (for multi-tenant) enable `RAG_ENABLE_PROFILE_ROUTING`. No pipeline
+code changes required.
 
 ---
 

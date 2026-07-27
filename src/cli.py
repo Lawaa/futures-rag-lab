@@ -1,10 +1,23 @@
-"""Interactive command-line interface for the RAG assistant."""
+"""Interactive command-line interface and unified startup wizard.
+
+Running the app drops the user into a short guided setup:
+
+1. Choose the interface language (English or Hungarian).
+2. Choose the model backend (hosted Gemini or a local Ollama model).
+3. Provide/validate the Gemini API key when needed (local models skip this).
+4. Choose how to interact: browser web UI or this terminal.
+
+The same wizard powers both entry points, so ``uv run main.py`` is the single
+way to launch the assistant.
+"""
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
+from . import i18n
 from .bootstrap import build_service, ensure_vector_db
 from .credentials import delete_stored_api_key, get_stored_api_key, store_api_key
 from .llm import check_llm_available, is_authentication_error, validate_api_key
@@ -12,131 +25,256 @@ from .logging_config import set_log_level
 from .rag_service import DEFAULT_SESSION_ID, RagService
 from .settings import Settings, get_settings
 
-_EXIT_COMMANDS = {"exit", "quit"}
+_BASE_EXIT_COMMANDS = {"exit", "quit"}
 
 
-def _prompt_for_api_key(reason: str | None = None) -> str:
+# --------------------------------------------------------------------------- #
+# Interactive selection helpers
+# --------------------------------------------------------------------------- #
+def _select_language() -> str:
+    """Ask the user for a language before any localized text is shown."""
+    languages = list(i18n.SUPPORTED_LANGUAGES)
+    print("\n🌐 Choose your language / Válasszon nyelvet:")
+    for index, code in enumerate(languages, start=1):
+        print(f"  {index}. {i18n.LANGUAGE_NAMES[code]}")
+
+    valid = {str(i) for i in range(1, len(languages) + 1)}
+    while True:
+        choice = input("> ").strip()
+        if choice in valid:
+            return languages[int(choice) - 1]
+        print("❌ Invalid choice / Érvénytelen választás.")
+
+
+def _choose(language: str, prompt_key: str, options: list[tuple[str, str]]) -> str:
+    """Prompt the user to pick a numbered option; return the selected key."""
+    print("\n" + i18n.t(language, prompt_key))
+    for index, (_, label_key) in enumerate(options, start=1):
+        print(f"  {index}. {i18n.t(language, label_key)}")
+
+    valid = [str(i) for i in range(1, len(options) + 1)]
+    while True:
+        choice = input("> ").strip()
+        if choice in valid:
+            return options[int(choice) - 1][0]
+        print(i18n.t(language, "invalid_choice", options=", ".join(valid)))
+
+
+# --------------------------------------------------------------------------- #
+# Credential handling
+# --------------------------------------------------------------------------- #
+def _prompt_for_api_key(language: str, reason: str | None = None) -> str:
     print("\n" + "=" * 60)
     if reason:
         print(f"⚠️  {reason}")
-    print("🔑 Gemini API key required.")
-    print("👉 Get a free API key here: https://aistudio.google.com/app/apikey")
+    print(i18n.t(language, "api_key_required"))
+    print(i18n.t(language, "api_key_get_link"))
     print("=" * 60 + "\n")
 
     while True:
-        api_key = input("Enter your Gemini API key: ").strip()
+        api_key = input(i18n.t(language, "api_key_enter")).strip()
         if api_key:
             store_api_key(api_key)
-            print("✅ API key securely saved to system credential storage!\n")
+            print(i18n.t(language, "api_key_saved") + "\n")
             return api_key
-        print("❌ API key cannot be empty. Please try again.")
+        print(i18n.t(language, "api_key_empty"))
 
 
 def _resolve_api_key(settings: Settings) -> str:
     """Return a validated API key, prompting the user as needed."""
-    api_key = get_stored_api_key() or _prompt_for_api_key("No stored API key found.")
+    language = settings.language
+    api_key = get_stored_api_key() or _prompt_for_api_key(
+        language, i18n.t(language, "api_key_none_stored")
+    )
     while not validate_api_key(api_key, settings):
         delete_stored_api_key()
-        api_key = _prompt_for_api_key("The provided API key is invalid or rejected by Google.")
+        api_key = _prompt_for_api_key(language, i18n.t(language, "api_key_invalid"))
     return api_key
 
 
 def _resolve_llm_credentials(settings: Settings) -> str | None:
     """Prepare the configured LLM backend, returning an API key if applicable."""
+    language = settings.language
     if settings.uses_gemini:
         return _resolve_api_key(settings)
 
     # Local Ollama backend: no key needed, but verify the server is reachable.
     print(
-        f"\n🤖 Using local Ollama model '{settings.ollama_model}' "
-        f"at {settings.ollama_base_url}"
+        "\n"
+        + i18n.t(
+            language,
+            "local_using",
+            model=settings.ollama_model,
+            url=settings.ollama_base_url,
+        )
     )
     ok, error = check_llm_available(settings)
     if not ok:
-        print("❌ Could not reach the local LLM.")
-        print("   Make sure Ollama is running and the model is pulled:")
+        print(i18n.t(language, "local_unreachable"))
+        print(i18n.t(language, "local_hint_intro"))
         print("     • ollama serve")
         print(f"     • ollama pull {settings.ollama_model}")
-        print(f"   Details: {error}")
+        print(i18n.t(language, "local_details", error=error))
         sys.exit(1)
-    print("✅ Local model ready.")
+    print(i18n.t(language, "local_ready"))
     return None
 
 
-def _print_sources(retrieval_sources) -> None:
+# --------------------------------------------------------------------------- #
+# CLI chat loop
+# --------------------------------------------------------------------------- #
+def _print_sources(language: str, retrieval_sources) -> None:
     if not retrieval_sources:
         return
-    print("📚 Sources referenced:")
+    print(i18n.t(language, "sources_label"))
     for source in retrieval_sources:
         print(f"  • {source}")
 
 
-def _chat_loop(service: RagService, session_id: str = DEFAULT_SESSION_ID) -> None:
-    print("\n🤖 Assistant is ready! Type 'exit' or 'quit' to stop.\n")
+def _chat_loop(
+    service: RagService, language: str, session_id: str = DEFAULT_SESSION_ID
+) -> None:
+    exit_commands = _BASE_EXIT_COMMANDS | i18n.EXIT_COMMANDS.get(language, set())
+    print("\n" + i18n.t(language, "chat_ready") + "\n")
     while True:
         try:
-            query = input("❓ Enter your trading query: ").strip()
+            query = input(i18n.t(language, "chat_prompt")).strip()
             if not query:
                 continue
-            if query.lower() in _EXIT_COMMANDS:
-                print("👋 Exiting. Goodbye!")
+            if query.lower() in exit_commands:
+                print(i18n.t(language, "exiting"))
                 return
 
-            print("\n🟡 Thinking...")
+            print("\n" + i18n.t(language, "thinking"))
             retrieval = service.retrieve(query, session_id)
 
-            print("\n💡 Answer:")
+            print("\n" + i18n.t(language, "answer_label"))
             for token in service.stream_answer(query, retrieval, session_id):
                 print(token, end="", flush=True)
             print("\n")
 
-            _print_sources(retrieval.sources)
+            _print_sources(language, retrieval.sources)
             print("\n" + "-" * 50)
 
         except KeyboardInterrupt:
-            print("\n👋 Exiting. Goodbye!")
+            print("\n" + i18n.t(language, "exiting"))
             return
         except Exception as error:
             if is_authentication_error(error):
-                print("\n❌ Runtime authentication/model error detected.")
+                print("\n" + i18n.t(language, "runtime_auth_error"))
                 delete_stored_api_key()
-                print("Please restart the application to enter a valid API key.")
+                print(i18n.t(language, "restart_hint"))
                 sys.exit(1)
             raise
 
 
-def run() -> None:
-    """Entry point for the interactive CLI."""
-    # Keep the conversation clean: suppress INFO logs from the pipeline so the
-    # assistant's answers stand out. Warnings and errors still surface.
-    set_log_level(logging.WARNING)
-    settings = get_settings()
-
-    print("=" * 50)
-    print("📈 Modern SOTA Futures Trading RAG Assistant")
-    print("=" * 50)
-
-    print("\n⏳ Preparing knowledge base (first run may download the embedding model)...")
-    if not ensure_vector_db(settings):
-        print("❌ Ingestion failed. Add data files to './data' and try again.")
-        sys.exit(1)
-    print("✅ Knowledge base ready.")
-
-    api_key = _resolve_llm_credentials(settings)
-
+# --------------------------------------------------------------------------- #
+# Launch modes
+# --------------------------------------------------------------------------- #
+def _launch_cli(settings: Settings, api_key: str | None) -> None:
+    """Build the service and start the terminal chat loop."""
+    language = settings.language
     try:
         service = build_service(settings, api_key)
     except Exception as error:
         if is_authentication_error(error):
-            print("\n❌ Authentication/model error during initialization.")
+            print("\n" + i18n.t(language, "init_auth_error"))
             if settings.uses_gemini:
                 delete_stored_api_key()
-            print("Please restart the application to enter a valid API key.")
+            print(i18n.t(language, "restart_hint"))
             sys.exit(1)
-        print(f"❌ Initialization error: {error}")
+        print(i18n.t(language, "init_error", error=error))
         sys.exit(1)
 
-    _chat_loop(service)
+    _chat_loop(service, language)
+
+
+def _launch_web_ui(settings: Settings) -> None:
+    """Hand off to the FastAPI server, propagating the wizard's choices.
+
+    The API reads configuration through :func:`get_settings`, so the choices are
+    published as ``RAG_*`` environment variables and the settings cache is
+    cleared before uvicorn imports the app.
+    """
+    import uvicorn
+
+    os.environ["RAG_LANGUAGE"] = settings.language
+    os.environ["RAG_LLM_PROVIDER"] = settings.llm_provider
+    os.environ["RAG_OLLAMA_MODEL"] = settings.ollama_model
+    os.environ["RAG_OLLAMA_BASE_URL"] = settings.ollama_base_url
+    get_settings.cache_clear()
+
+    print(
+        "\n"
+        + i18n.t(
+            settings.language,
+            "web_starting",
+            host=settings.api_host,
+            port=settings.api_port,
+        )
+    )
+    uvicorn.run(
+        "src.api:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=False,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Entry point
+# --------------------------------------------------------------------------- #
+def run() -> None:
+    """Unified interactive entry point for the assistant."""
+    # Keep the conversation clean: suppress INFO logs from the pipeline so the
+    # assistant's answers stand out. Warnings and errors still surface.
+    set_log_level(logging.WARNING)
+
+    # 1. Language.
+    language = _select_language()
+
+    print("\n" + "=" * 50)
+    print(i18n.t(language, "banner_title"))
+    print("=" * 50)
+
+    # 2. Model backend.
+    provider = _choose(
+        language,
+        "choose_provider",
+        [
+            ("gemini", "provider_option_gemini"),
+            ("ollama", "provider_option_local"),
+        ],
+    )
+
+    settings = get_settings().model_copy(
+        update={"language": language, "llm_provider": provider}
+    )
+
+    # 3. Credentials (API key for Gemini, reachability check for local).
+    api_key = _resolve_llm_credentials(settings)
+
+    # 4. Interface.
+    interface = _choose(
+        language,
+        "choose_interface",
+        [
+            ("web", "interface_option_web"),
+            ("cli", "interface_option_cli"),
+        ],
+    )
+
+    # Prepare the knowledge base (localized progress messages).
+    print("\n" + i18n.t(language, "kb_preparing"))
+    if not ensure_vector_db(settings):
+        print(i18n.t(language, "kb_failed"))
+        sys.exit(1)
+    print(i18n.t(language, "kb_ready"))
+
+    if interface == "web":
+        _launch_web_ui(settings)
+    else:
+        _launch_cli(settings, api_key)
 
 
 if __name__ == "__main__":
