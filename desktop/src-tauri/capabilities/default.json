@@ -6,7 +6,6 @@
   "permissions": [
     "core:default",
     "core:window:default",
-    "core:webview:allow-navigate",
     "opener:default",
     "opener:allow-open-path",
     {
