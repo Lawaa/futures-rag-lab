@@ -13,7 +13,7 @@ separate from the application source in [`src/`](../src).
 ## 1. The problem being solved
 
 The assistant is a Python application that depends on heavy libraries
-(ChromaDB, LangChain, sentence-transformers, and so on). Asking an end user to
+(ChromaDB, LangChain, FastEmbed/ONNX, and so on). Asking an end user to
 install Python, create a virtual environment, and resolve those dependencies is
 fragile — it breaks across operating systems and Python versions. This is the
 **"different environments" problem**.
@@ -91,9 +91,11 @@ The entry point is deliberately thin. It:
   environment variables (the same variables documented in the main README).
 - Starts the unchanged FastAPI application.
 
-Because the spec file uses PyInstaller's `collect_all` on the heavy packages,
-their hidden imports and data files are pulled in wholesale, which is what makes
-the frozen binary work despite the complex ML/LLM dependency tree.
+Because the spec file uses PyInstaller's `collect_all` on the packages the
+sidecar needs (and explicitly **excludes** PyTorch / transformers), hidden
+imports and data files are pulled in without shipping a multi-hundred megabyte
+ML stack. Embedding **weights** and the Chroma database are created under the
+user data directory on first run — not baked into the installer.
 
 ---
 

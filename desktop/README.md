@@ -19,11 +19,17 @@ nothing else preinstalled.
 
 ## Build locally
 
+Prerequisites: [Rust](https://www.rust-lang.org/tools/install) (`cargo` on
+`PATH`), [Node.js](https://nodejs.org/), and the
+[Tauri system dependencies](https://tauri.app/start/prerequisites/) for your
+platform. On Windows that includes the MSVC C++ build tools. Restart the
+terminal after installing Rust so `%USERPROFILE%\.cargo\bin` is on `PATH`.
+
 ```bash
 # from the repository root
 uv sync --dev
 
-# from this folder
+# from this folder (activate the project venv first so `python` finds PyInstaller)
 npm install
 npm run tauri icon app-icon.png   # once, to generate icons
 npm run tauri build               # freezes the backend, then builds the installer

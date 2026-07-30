@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Accidental npm lockfile at repo root (the desktop app lives in desktop/)
+/package-lock.json
+
 # Database
 chroma_db/
 .chroma_db/
