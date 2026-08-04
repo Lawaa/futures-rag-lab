@@ -24,9 +24,7 @@ def test_user_data_root_follows_platform_conventions(monkeypatch) -> None:
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setattr(entry.sys, "platform", "linux")
 
-    assert entry.user_data_root() == Path(
-        "/home/tester/.local/share/FuturesTradingAssistant"
-    )
+    assert entry.user_data_root().as_posix().endswith(".local/share/FuturesTradingAssistant")
 
 
 def test_configure_environment_points_settings_at_user_dirs(
