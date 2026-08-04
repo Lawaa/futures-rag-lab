@@ -181,6 +181,8 @@ repurposing:
 | `RAG_ENABLE_GROUNDEDNESS_CHECK` | Verify answers are supported by the documents |
 | `RAG_ENABLE_SELF_CORRECTION` / `RAG_MAX_RETRIEVAL_RETRIES` | Grade-and-retry loop |
 | `RAG_LLM_PROVIDER` | `gemini` (hosted) or `ollama` (local, private) |
+| `RAG_USE_S3_STORAGE` | Enable AWS S3 storage mode (`true` / `false`) |
+| `RAG_AWS_S3_BUCKET_NAME` | AWS S3 bucket name (default: `futures-rag-lab-docs`) |
 
 > For sensitive domains (legal, healthcare), consider `RAG_LLM_PROVIDER=ollama`
 > so no document text or questions leave the machine.

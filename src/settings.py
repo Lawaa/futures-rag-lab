@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     api_host: str = Field(default="127.0.0.1")
     api_port: int = Field(default=8000, gt=0, le=65535)
 
+    # --- AWS S3 Storage (Optional) -------------------------------------------
+    use_s3_storage: bool = Field(default=False, description="Enable S3 document storage.")
+    aws_access_key_id: str | None = Field(default=None, description="AWS access key ID.")
+    aws_secret_access_key: str | None = Field(default=None, description="AWS secret access key.")
+    aws_region: str = Field(default="eu-central-1", description="AWS region.")
+    aws_s3_bucket_name: str = Field(default="futures-rag-lab-docs", description="S3 bucket name.")
+
     @property
     def manifest_path(self) -> Path:
         """Location of the ingestion fingerprint manifest."""

@@ -12,6 +12,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with **`uv`
 - **LLM:** Pluggable - hosted **Google Gemini** *or* a **local Ollama** model (e.g. Qwen) with no code changes
 - **Credential Management:** OS-native keyring (`keyring`) - no plain text `.env` files required
 - **Multi-Format Ingestion:** Auto-loads `.pdf`, `.txt`, and `.md` files from `./data`
+- **Cloud Document Storage (AWS S3):** Optional S3 cloud integration for storing, streaming, and managing documents dynamically alongside local storage.
 - **Smart Data Auto-Sync:** Automated change detection via `.data_manifest.json` fingerprinting
 - **LangGraph Orchestration:** The retrieval stage runs as a compiled LangGraph state machine with conditional routing and a bounded self-correction loop
 - **Cross-Lingual Retrieval:** Every question is rewritten into the corpus language (using canonical domain terminology) before searching, so a Hungarian question still matches English documents (and vice-versa)
@@ -50,13 +51,14 @@ The code is organized into small, single-responsibility layers under `src/`:
 | `rag_service.py` | `RagService` orchestration (LangGraph retrieval -> groundedness-checked, streamed answer) |
 | `bootstrap.py` | Wires settings, DB, checkpointer and service together |
 | `cli.py` / `api.py` | Unified startup wizard + interactive CLI, and the FastAPI interface |
+| `s3_service.py` | AWS S3 storage wrapper using `boto3` for streaming and remote file ops |
 
 Configuration can be overridden through environment variables (or a `.env` file),
 e.g. `RAG_LANGUAGE`, `RAG_GEMINI_MODEL`, `RAG_RETRIEVER_K`, `RAG_CHUNK_SIZE`, `RAG_API_PORT`,
 `RAG_RETRIEVAL_LANGUAGE`, `RAG_ENABLE_SELF_CORRECTION`, `RAG_MAX_RETRIEVAL_RETRIES`,
 `RAG_ENABLE_GROUNDEDNESS_CHECK`, `RAG_ENABLE_MULTI_QUERY`, `RAG_MULTI_QUERY_COUNT`,
 `RAG_ENABLE_PROFILE_ROUTING`, `RAG_PROFILES_PATH`, `RAG_ENABLE_CHECKPOINTING`,
-`RAG_LLM_REQUESTS_PER_MINUTE`.
+`RAG_LLM_REQUESTS_PER_MINUTE`, `RAG_USE_S3_STORAGE`, `RAG_AWS_ACCESS_KEY_ID`, `RAG_AWS_SECRET_ACCESS_KEY`, `RAG_AWS_REGION`, `RAG_AWS_S3_BUCKET_NAME`.
 
 ### Retrieval pipeline (LangGraph)
 
@@ -165,8 +167,9 @@ This starts the **guided setup wizard**, which asks, in order:
 
 1. **Language** - English or Hungarian (Magyar).
 2. **Model backend** - hosted **Google Gemini** or a **local Ollama** model.
-3. **API key** - only when Gemini is chosen and no stored key is found.
-4. **Interface** - the browser **Web UI** or the **command line**.
+3. **AWS S3 Cloud Storage** - optional interactive configuration for cloud document storage.
+4. **API key** - only when Gemini is chosen and no stored key is found.
+5. **Interface** - the browser **Web UI** or the **command line**.
 
 Your choices drive everything from there, so `uv run main.py` is the single entry
 point for both the web UI and the terminal chat.
@@ -205,6 +208,10 @@ Key endpoints:
 | `PATCH` | `/conversations/{id}/pin` | Pin/unpin a conversation so it survives auto-pruning |
 | `DELETE` | `/conversations/{id}` | Permanently delete a saved conversation |
 | `DELETE` | `/sessions/{session_id}` | Clear a conversation's history |
+| `GET` | `/documents` | List stored documents (from local storage or S3) |
+| `POST` | `/documents/upload` | Upload a new document to storage |
+| `DELETE` | `/documents/{filename}` | Delete a document from storage |
+| `GET` | `/documents/{filename}/download` | Download a document stream |
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat\
