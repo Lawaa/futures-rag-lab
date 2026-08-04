@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 
 from . import i18n
 from .bootstrap import build_service, ensure_vector_db
@@ -23,9 +24,48 @@ from .credentials import delete_stored_api_key, get_stored_api_key, store_api_ke
 from .llm import check_llm_available, is_authentication_error, validate_api_key
 from .logging_config import set_log_level
 from .rag_service import DEFAULT_SESSION_ID, RagService
+from .s3_service import S3StorageService
 from .settings import Settings, get_settings
 
 _BASE_EXIT_COMMANDS = {"exit", "quit"}
+
+
+def _persist_s3_credentials_to_env(settings: Settings) -> None:
+    """Write S3 credentials to the local .env file for persistence.
+
+    Updates or creates the .env file with the AWS configuration so users
+    don't need to re-enter credentials on subsequent runs.
+    """
+    env_path = Path(".env")
+    env_lines = []
+
+    # Read existing .env file if it exists
+    if env_path.exists():
+        env_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    # Remove any existing S3-related lines to avoid duplicates
+    s3_keys = {
+        "RAG_USE_S3_STORAGE",
+        "RAG_AWS_ACCESS_KEY_ID",
+        "RAG_AWS_SECRET_ACCESS_KEY",
+        "RAG_AWS_REGION",
+        "RAG_AWS_S3_BUCKET_NAME",
+    }
+    filtered_lines = [line for line in env_lines if not any(line.startswith(key + "=") for key in s3_keys)]
+
+    # Append new S3 configuration
+    filtered_lines.append(f"RAG_USE_S3_STORAGE={str(settings.use_s3_storage).lower()}")
+    if settings.aws_access_key_id:
+        filtered_lines.append(f"RAG_AWS_ACCESS_KEY_ID={settings.aws_access_key_id}")
+    if settings.aws_secret_access_key:
+        filtered_lines.append(f"RAG_AWS_SECRET_ACCESS_KEY={settings.aws_secret_access_key}")
+    if settings.aws_region:
+        filtered_lines.append(f"RAG_AWS_REGION={settings.aws_region}")
+    if settings.aws_s3_bucket_name:
+        filtered_lines.append(f"RAG_AWS_S3_BUCKET_NAME={settings.aws_s3_bucket_name}")
+
+    # Write back to .env
+    env_path.write_text("\n".join(filtered_lines) + "\n", encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- #
@@ -120,6 +160,81 @@ def _resolve_llm_credentials(settings: Settings) -> str | None:
     return None
 
 
+def _resolve_s3_credentials(settings: Settings) -> Settings:
+    """Resolve AWS S3 credentials and configuration through interactive prompts.
+
+    Returns updated settings with S3 configuration if enabled, otherwise
+    returns settings with use_s3_storage=False.
+    """
+    language = settings.language
+
+    # Ask user if they want to enable S3 storage
+    print("\n" + i18n.t(language, "s3_enable_prompt"))
+    choice = input("> ").strip().lower()
+
+    # Accept "y", "yes", "i", "igen" (Hungarian for yes)
+    if choice not in {"y", "yes", "i", "igen"}:
+        print("\n" + i18n.t(language, "s3_disabled"))
+        return settings.model_copy(update={"use_s3_storage": False})
+
+    # User wants S3 - check if credentials are already set
+    access_key = settings.aws_access_key_id or os.environ.get("AWS_ACCESS_KEY_ID")
+    secret_key = settings.aws_secret_access_key or os.environ.get("AWS_SECRET_ACCESS_KEY")
+
+    if not access_key or not secret_key:
+        print("\n" + i18n.t(language, "s3_credentials_missing"))
+
+        # Prompt for missing credentials
+        while not access_key:
+            access_key = input(i18n.t(language, "s3_access_key_prompt")).strip()
+            if not access_key:
+                print(i18n.t(language, "api_key_empty"))
+
+        while not secret_key:
+            secret_key = input(i18n.t(language, "s3_secret_key_prompt")).strip()
+            if not secret_key:
+                print(i18n.t(language, "api_key_empty"))
+
+    # Prompt for region (with default)
+    region_input = input(i18n.t(language, "s3_region_prompt")).strip()
+    region = region_input if region_input else settings.aws_region
+
+    # Prompt for bucket name (with default)
+    bucket_input = input(i18n.t(language, "s3_bucket_prompt")).strip()
+    bucket = bucket_input if bucket_input else settings.aws_s3_bucket_name
+
+    # Update settings with provided values
+    updated_settings = settings.model_copy(
+        update={
+            "use_s3_storage": True,
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+            "aws_region": region,
+            "aws_s3_bucket_name": bucket,
+        }
+    )
+
+    # Validate S3 bucket access
+    print("\n" + i18n.t(language, "s3_checking_access"))
+    try:
+        s3_service = S3StorageService(updated_settings)
+        if s3_service.check_bucket_access():
+            print(i18n.t(language, "s3_access_success"))
+            print("\n" + i18n.t(language, "s3_enabled"))
+            # Persist credentials to .env file for future runs
+            _persist_s3_credentials_to_env(updated_settings)
+            return updated_settings
+        else:
+            print(i18n.t(language, "s3_access_failed"))
+            print("\n" + i18n.t(language, "s3_disabled"))
+            return settings.model_copy(update={"use_s3_storage": False})
+    except Exception as error:
+        print(i18n.t(language, "s3_access_failed"))
+        print(f"   Error: {error}")
+        print("\n" + i18n.t(language, "s3_disabled"))
+        return settings.model_copy(update={"use_s3_storage": False})
+
+
 # --------------------------------------------------------------------------- #
 # CLI chat loop
 # --------------------------------------------------------------------------- #
@@ -202,6 +317,15 @@ def _launch_web_ui(settings: Settings) -> None:
     os.environ["RAG_LLM_PROVIDER"] = settings.llm_provider
     os.environ["RAG_OLLAMA_MODEL"] = settings.ollama_model
     os.environ["RAG_OLLAMA_BASE_URL"] = settings.ollama_base_url
+
+    # Explicitly export ALL AWS settings to environment
+    os.environ["RAG_USE_S3_STORAGE"] = str(settings.use_s3_storage)
+    os.environ["RAG_AWS_ACCESS_KEY_ID"] = settings.aws_access_key_id or ""
+    os.environ["RAG_AWS_SECRET_ACCESS_KEY"] = settings.aws_secret_access_key or ""
+    os.environ["RAG_AWS_REGION"] = settings.aws_region or ""
+    os.environ["RAG_AWS_S3_BUCKET_NAME"] = settings.aws_s3_bucket_name or ""
+
+    # Clear settings cache immediately after setting environment variables
     get_settings.cache_clear()
 
     print(
@@ -254,7 +378,10 @@ def run() -> None:
     # 3. Credentials (API key for Gemini, reachability check for local).
     api_key = _resolve_llm_credentials(settings)
 
-    # 4. Interface.
+    # 4. AWS S3 Storage (optional cloud storage for documents).
+    settings = _resolve_s3_credentials(settings)
+
+    # 5. Interface.
     interface = _choose(
         language,
         "choose_interface",

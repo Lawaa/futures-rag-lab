@@ -169,6 +169,51 @@ MESSAGES: dict[str, dict[Language, str]] = {
         "en": "🌐 Starting web UI at http://{host}:{port} (press Ctrl+C to stop)...",
         "hu": "🌐 Webes felület indítása: http://{host}:{port} (leállítás: Ctrl+C)...",
     },
+    # --- AWS S3 Storage --------------------------------------------------------
+    "s3_enable_prompt": {
+        "en": "☁️  Enable AWS S3 Cloud Storage for documents? (y/N)",
+        "hu": "☁️  Engedélyezi az AWS S3 Cloud tárolást a dokumentumokhoz? (i/N)",
+    },
+    "s3_credentials_missing": {
+        "en": "⚠️  AWS credentials not found in environment or settings.",
+        "hu": "⚠️  AWS hitelesítő adatok nem találhatók a környezeti változókban vagy beállításokban.",
+    },
+    "s3_access_key_prompt": {
+        "en": "Enter your AWS Access Key ID: ",
+        "hu": "Adja meg az AWS Access Key ID-t: ",
+    },
+    "s3_secret_key_prompt": {
+        "en": "Enter your AWS Secret Access Key: ",
+        "hu": "Adja meg az AWS Secret Access Key-t: ",
+    },
+    "s3_region_prompt": {
+        "en": "Enter AWS Region [default: eu-central-1]: ",
+        "hu": "Adja meg az AWS régiót [alapértelmezett: eu-central-1]: ",
+    },
+    "s3_bucket_prompt": {
+        "en": "Enter S3 Bucket Name [default: futures-rag-lab-docs]: ",
+        "hu": "Adja meg az S3 bucket nevét [alapértelmezett: futures-rag-lab-docs]: ",
+    },
+    "s3_checking_access": {
+        "en": "🔍 Checking S3 bucket access...",
+        "hu": "🔍 S3 bucket hozzáférés ellenőrzése...",
+    },
+    "s3_access_success": {
+        "en": "✅ S3 bucket access verified successfully.",
+        "hu": "✅ S3 bucket hozzáférés sikeresen ellenőrizve.",
+    },
+    "s3_access_failed": {
+        "en": "❌ Failed to access S3 bucket. Please check your credentials and bucket name.",
+        "hu": "❌ S3 bucket elérése sikertelen. Ellenőrizze a hitelesítő adatokat és a bucket nevét.",
+    },
+    "s3_disabled": {
+        "en": "📁 Using local storage for documents.",
+        "hu": "📁 Helyi tárolás használata a dokumentumokhoz.",
+    },
+    "s3_enabled": {
+        "en": "☁️  AWS S3 storage enabled for documents.",
+        "hu": "☁️  AWS S3 tárolás engedélyezve a dokumentumokhoz.",
+    },
 }
 
 

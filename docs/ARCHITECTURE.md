@@ -85,7 +85,7 @@ immediately at startup rather than causing confusing failures later.
 Before the assistant can answer anything, your documents have to be transformed
 into a form that supports fast semantic search.
 
-### 4.1 Loading
+### 4.1 Loading & Cloud Storage Support
 
 The ingestion pipeline scans the data directory and loads every supported file:
 
@@ -94,6 +94,10 @@ The ingestion pipeline scans the data directory and loads every supported file:
 - **Text and Markdown** files are loaded as whole documents.
 
 Empty pages and empty files are skipped so they don't pollute the index.
+
+The ingestion pipeline scans the configured document source:
+- **Local Storage:** Loads supported files directly from the local `./data` directory.
+- **AWS S3 Storage:** When `RAG_USE_S3_STORAGE=true`, document metadata and file streams are dynamically fetched from the configured S3 bucket via `boto3` without needing local file persistence.
 
 ### 4.2 Chunking
 
@@ -130,6 +134,8 @@ On startup the app compares the current fingerprint against the stored one:
 
 The result is a fast startup in the common case, with automatic rebuilds exactly
 when your documents actually change.
+
+> Note: When S3 storage is enabled, change detection queries object timestamps and sizes directly from S3 to determine if a vector DB rebuild is required.
 
 ---
 
