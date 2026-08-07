@@ -13,6 +13,7 @@ way to launch the assistant.
 
 from __future__ import annotations
 
+import configparser
 import logging
 import os
 import sys
@@ -30,20 +31,49 @@ from .settings import Settings, get_settings
 _BASE_EXIT_COMMANDS = {"exit", "quit"}
 
 
-def _persist_s3_credentials_to_env(settings: Settings) -> None:
-    """Write S3 credentials to the local .env file for persistence.
+def _persist_aws_credentials_to_file(
+    access_key: str | None, secret_key: str | None, credentials_path: Path | None = None
+) -> None:
+    """Write AWS credentials to the standard ~/.aws/credentials file under [default].
 
-    Updates or creates the .env file with the AWS configuration so users
-    don't need to re-enter credentials on subsequent runs.
+    Saves the access key and secret key so boto3 can automatically resolve
+    credentials via its default credential provider chain.
     """
-    env_path = Path(".env")
+    if not access_key or not secret_key:
+        return
+
+    target_path = credentials_path or (Path.home() / ".aws" / "credentials")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config = configparser.ConfigParser()
+    if target_path.exists():
+        config.read(target_path, encoding="utf-8")
+
+    if "default" not in config.sections():
+        config.add_section("default")
+
+    config.set("default", "aws_access_key_id", access_key)
+    config.set("default", "aws_secret_access_key", secret_key)
+
+    with target_path.open("w", encoding="utf-8") as f:
+        config.write(f)
+
+
+def _persist_s3_credentials_to_env(settings: Settings, env_path: Path | None = None) -> None:
+    """Write non-sensitive S3 configuration to the local .env file for persistence.
+
+    Updates or creates the .env file with non-sensitive AWS settings (excluding
+    RAG_AWS_SECRET_ACCESS_KEY) so users don't need to re-enter configuration on
+    subsequent runs.
+    """
+    target_env = env_path or Path(".env")
     env_lines = []
 
     # Read existing .env file if it exists
-    if env_path.exists():
-        env_lines = env_path.read_text(encoding="utf-8").splitlines()
+    if target_env.exists():
+        env_lines = target_env.read_text(encoding="utf-8").splitlines()
 
-    # Remove any existing S3-related lines to avoid duplicates
+    # Remove any existing S3-related lines to avoid duplicates (including legacy secret keys)
     s3_keys = {
         "RAG_USE_S3_STORAGE",
         "RAG_AWS_ACCESS_KEY_ID",
@@ -53,19 +83,17 @@ def _persist_s3_credentials_to_env(settings: Settings) -> None:
     }
     filtered_lines = [line for line in env_lines if not any(line.startswith(key + "=") for key in s3_keys)]
 
-    # Append new S3 configuration
+    # Append non-sensitive S3 configuration (RAG_AWS_SECRET_ACCESS_KEY is deliberately excluded)
     filtered_lines.append(f"RAG_USE_S3_STORAGE={str(settings.use_s3_storage).lower()}")
     if settings.aws_access_key_id:
         filtered_lines.append(f"RAG_AWS_ACCESS_KEY_ID={settings.aws_access_key_id}")
-    if settings.aws_secret_access_key:
-        filtered_lines.append(f"RAG_AWS_SECRET_ACCESS_KEY={settings.aws_secret_access_key}")
     if settings.aws_region:
         filtered_lines.append(f"RAG_AWS_REGION={settings.aws_region}")
     if settings.aws_s3_bucket_name:
         filtered_lines.append(f"RAG_AWS_S3_BUCKET_NAME={settings.aws_s3_bucket_name}")
 
     # Write back to .env
-    env_path.write_text("\n".join(filtered_lines) + "\n", encoding="utf-8")
+    target_env.write_text("\n".join(filtered_lines) + "\n", encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- #
@@ -182,6 +210,17 @@ def _resolve_s3_credentials(settings: Settings) -> Settings:
     secret_key = settings.aws_secret_access_key or os.environ.get("AWS_SECRET_ACCESS_KEY")
 
     if not access_key or not secret_key:
+        aws_cred_file = Path.home() / ".aws" / "credentials"
+        if aws_cred_file.exists():
+            cp = configparser.ConfigParser()
+            cp.read(aws_cred_file, encoding="utf-8")
+            if "default" in cp:
+                if not access_key:
+                    access_key = cp["default"].get("aws_access_key_id")
+                if not secret_key:
+                    secret_key = cp["default"].get("aws_secret_access_key")
+
+    if not access_key or not secret_key:
         print("\n" + i18n.t(language, "s3_credentials_missing"))
 
         # Prompt for missing credentials
@@ -221,7 +260,8 @@ def _resolve_s3_credentials(settings: Settings) -> Settings:
         if s3_service.check_bucket_access():
             print(i18n.t(language, "s3_access_success"))
             print("\n" + i18n.t(language, "s3_enabled"))
-            # Persist credentials to .env file for future runs
+            # Persist secret credentials to ~/.aws/credentials and non-sensitive settings to .env
+            _persist_aws_credentials_to_file(access_key, secret_key)
             _persist_s3_credentials_to_env(updated_settings)
             return updated_settings
         else:
@@ -318,10 +358,9 @@ def _launch_web_ui(settings: Settings) -> None:
     os.environ["RAG_OLLAMA_MODEL"] = settings.ollama_model
     os.environ["RAG_OLLAMA_BASE_URL"] = settings.ollama_base_url
 
-    # Explicitly export ALL AWS settings to environment
+    # Export non-sensitive AWS settings to environment (secret key is loaded via AWS default provider chain)
     os.environ["RAG_USE_S3_STORAGE"] = str(settings.use_s3_storage)
     os.environ["RAG_AWS_ACCESS_KEY_ID"] = settings.aws_access_key_id or ""
-    os.environ["RAG_AWS_SECRET_ACCESS_KEY"] = settings.aws_secret_access_key or ""
     os.environ["RAG_AWS_REGION"] = settings.aws_region or ""
     os.environ["RAG_AWS_S3_BUCKET_NAME"] = settings.aws_s3_bucket_name or ""
 
