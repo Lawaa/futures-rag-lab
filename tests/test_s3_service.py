@@ -36,8 +36,10 @@ def test_s3_service_disabled(disabled_settings: Settings) -> None:
     assert service.bucket_name is None
 
 
-def test_s3_service_missing_credentials() -> None:
+@patch("boto3.Session")
+def test_s3_service_missing_credentials(mock_session: MagicMock) -> None:
     """Test error raised when S3 is enabled but credentials are missing."""
+    mock_session.return_value.get_credentials.return_value = None
     invalid_settings = Settings(
         use_s3_storage=True,
         aws_access_key_id="",
@@ -49,7 +51,7 @@ def test_s3_service_missing_credentials() -> None:
 
 @patch("boto3.client")
 def test_s3_service_initialization(mock_boto_client: MagicMock, valid_s3_settings: Settings) -> None:
-    """Test successful S3 service initialization with mocked boto3."""
+    """Test successful S3 service initialization with mocked boto3 and explicit credentials."""
     service = S3StorageService(valid_s3_settings)
 
     assert service.enabled
@@ -60,6 +62,27 @@ def test_s3_service_initialization(mock_boto_client: MagicMock, valid_s3_setting
         aws_secret_access_key="mock_secret_key",
         config=ANY,
     )
+
+
+@patch("boto3.client")
+@patch("boto3.Session")
+def test_s3_service_initialization_default_credentials(
+    mock_session: MagicMock, mock_boto_client: MagicMock
+) -> None:
+    """Test S3 service initialization using boto3 default credential chain when secret key is None."""
+    mock_session.return_value.get_credentials.return_value = MagicMock()
+    s3_settings = Settings(
+        use_s3_storage=True,
+        aws_access_key_id="mock_access_key",
+        aws_secret_access_key=None,
+        aws_region="eu-central-1",
+        aws_s3_bucket_name="test-bucket",
+    )
+    service = S3StorageService(s3_settings)
+
+    assert service.enabled
+    assert service.bucket_name == "test-bucket"
+    mock_boto_client.assert_called_once_with("s3", config=ANY)
 
 
 @patch("boto3.client")

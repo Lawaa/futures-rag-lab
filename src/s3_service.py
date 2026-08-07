@@ -48,12 +48,6 @@ class S3StorageService:
             self._bucket_name = None
             return
 
-        if not settings.aws_access_key_id or not settings.aws_secret_access_key:
-            raise ValueError(
-                "S3 storage is enabled but AWS credentials are missing. "
-                "Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
-            )
-
         self._enabled = True
         self._bucket_name = settings.aws_s3_bucket_name
 
@@ -63,13 +57,21 @@ class S3StorageService:
             retries={"max_attempts": 3, "mode": "adaptive"},
         )
 
+        client_kwargs: dict[str, Any] = {"config": config}
+        if settings.aws_access_key_id and settings.aws_secret_access_key:
+            client_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+            client_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+        else:
+            # Fall back to boto3's default credential provider chain (~/.aws/credentials, env, etc.)
+            session = boto3.Session(region_name=settings.aws_region)
+            if not session.get_credentials():
+                raise ValueError(
+                    "S3 storage is enabled but AWS credentials are missing. "
+                    "Please set AWS credentials in ~/.aws/credentials or environment variables."
+                )
+
         try:
-            self._s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-                config=config,
-            )
+            self._s3_client = boto3.client("s3", **client_kwargs)
             logger.info(
                 "S3 service initialized for bucket '%s' in region '%s'.",
                 self._bucket_name,

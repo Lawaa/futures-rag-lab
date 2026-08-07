@@ -126,9 +126,10 @@ pulled, printing clear instructions if not.
 
 ## 🔑 Security & API Key Setup
 
-This project **does not require a `.env` file**.
+This project avoids storing clear-text secret credentials in `.env` files:
 
-On the first launch, the system will securely prompt you for your Google Gemini API key and store it in your operating system's native credential vault (e.g., **Windows Credential Manager**, **macOS Keychain**, or **Secret Service API** on Linux).
+1. **Google Gemini API Key:** On the first launch, the system will securely prompt you for your Google Gemini API key and store it in your operating system's native credential vault (e.g., **Windows Credential Manager**, **macOS Keychain**, or **Secret Service API** on Linux).
+2. **AWS S3 Credentials:** When enabling AWS S3 document storage via the CLI wizard, non-sensitive parameters (`RAG_USE_S3_STORAGE`, `RAG_AWS_ACCESS_KEY_ID`, `RAG_AWS_REGION`, `RAG_AWS_S3_BUCKET_NAME`) are kept in `.env`. Secret access keys (`RAG_AWS_SECRET_ACCESS_KEY`) are **never stored in `.env`** and are saved to the standard AWS credentials file (`~/.aws/credentials`) under the `[default]` profile, adhering to AWS security best practices and `boto3`'s default credential provider chain.
 
 > 💡 **Note:** You can obtain a free API key at [Google AI Studio](https://aistudio.google.com/app/apikey).
 
