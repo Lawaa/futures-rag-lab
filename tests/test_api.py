@@ -561,6 +561,55 @@ def test_static_logo_served_correctly() -> None:
     assert "image/png" in res.headers.get("content-type", "")
 
 
+def test_document_context_endpoint_text() -> None:
+    res = client.get("/documents/trading-glossary.txt/context?snippet=Margin")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["filename"] == "trading-glossary.txt"
+    assert "full_text" in data
+    assert "highlight" in data
+    assert "Margin" in data["highlight"]
+
+
+def test_document_context_endpoint_pdf() -> None:
+    res = client.get("/documents/FuturesContractsFINAL.pdf/context?page=3&snippet=leverage to futures positions")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["filename"] == "FuturesContractsFINAL.pdf"
+    assert data["page"] == 3
+    assert "full_text" in data
+    # Verify sentence boundary expansion captured preceding sentence words
+    assert "minimum initial margin" in data["highlight"]
+    assert "leverage to futures positions" in data["highlight"]
+
+
+def test_document_context_endpoint_not_found() -> None:
+    res = client.get("/documents/nonexistent_document_123.txt/context")
+    assert res.status_code == 404
+
+
+def test_ui_components_for_inspector_and_graph() -> None:
+    html_res = client.get("/")
+    assert html_res.status_code == 200
+    html = html_res.text
+    # Verify active query bar was removed
+    assert 'id="activeQueryBanner"' not in html
+    # Verify Knowledge Graph widget controls
+    assert 'id="graphInfoBtn"' in html
+    assert 'id="btnExpandGraph"' in html
+    assert 'id="modal-graph-viewer"' in html
+    assert 'id="modal-pdf-viewer"' in html
+
+    css_res = client.get("/static/assets/app.css")
+    assert css_res.status_code == 200
+    css = css_res.text
+    # Verify Light Mode overhaul and extracted highlight styling
+    assert '[data-theme="light"] .msg-row.bot .msg-bubble' in css
+    assert ".extracted-highlight" in css
+    assert ".graph-viewer-card" in css
+    assert ".context-container" in css
+
+
 
 
 

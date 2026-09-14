@@ -61,10 +61,12 @@ def _load_documents(data_path: Path) -> list[Document]:
 
 
 def _split_documents(documents: list[Document], settings: Settings) -> list[Document]:
-    """Split documents into overlapping chunks for retrieval."""
+    """Split documents into overlapping chunks for retrieval, preserving sentence boundaries."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
+        separators=["\n\n", "\n", ". ", "? ", "! ", "; ", " ", ""],
+        keep_separator="end",
     )
     return splitter.split_documents(documents)
 

@@ -11,8 +11,13 @@
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Left Sidebar -->
+  <!-- Ambient background glow blobs -->
+  <div class="ambient-glow glow-cyan" aria-hidden="true"></div>
+  <div class="ambient-glow glow-violet" aria-hidden="true"></div>
+  <div class="ambient-glow glow-blue" aria-hidden="true"></div>
+
+  <div class="app-layout" id="appLayout">
+    <!-- Left Sidebar (Panel 1) -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="brand">
@@ -27,6 +32,26 @@
           <span data-i18n="newChat">New chat</span>
         </button>
       </div>
+
+      <!-- Quick Nav Action Tabs from concept image -->
+      <nav class="sidebar-nav">
+        <button class="sidebar-nav-item active" id="nav-chatlab" type="button">
+          <span class="nav-icon">💬</span>
+          <span>AI ChatLab</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-legal" type="button">
+          <span class="nav-icon">⚖️</span>
+          <span data-i18n="navLegalCodes">Legal Codes</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-docs" type="button">
+          <span class="nav-icon">📁</span>
+          <span data-i18n="navDocs">Docs Manager</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-settings" type="button">
+          <span class="nav-icon">⚙️</span>
+          <span data-i18n="settingsTitle">Settings</span>
+        </button>
+      </nav>
 
       <div class="conv-section-label" data-i18n="conversationsLabel">Recent conversations</div>
       <div class="conversations-list" id="conversations"></div>
@@ -43,11 +68,16 @@
       </div>
     </aside>
 
-    <!-- Main Content Stream -->
-    <main class="main-panel">
-      <!-- Minimalist Glassmorphism Top Bar -->
+    <!-- Main Content Workspace (Panels 2 & 3) -->
+    <main class="main-panel" id="mainPanel">
+      <!-- Minimalist Glassmorphism Top Bar with window controls -->
       <header class="topbar">
         <div class="topbar-left">
+          <div class="window-controls" aria-hidden="true">
+            <span class="win-btn win-close"></span>
+            <span class="win-btn win-minimize"></span>
+            <span class="win-btn win-maximize"></span>
+          </div>
           <button class="icon-button mobile-toggle" id="btn-sidebar-toggle" aria-label="Toggle Sidebar">☰</button>
           <div class="active-conv-crumb flex-1 min-w-0 max-w-xl truncate pr-4" id="chatTitleHeader" data-i18n="headerTitle">Futures Trading Assistant</div>
         </div>
@@ -68,6 +98,9 @@
           </div>
           <select id="profile-select" style="display: none;"></select>
 
+          <button id="btn-toggle-inspector" class="ctrl-btn inspector-toggle-btn" title="Toggle Right Document Inspector">
+            <span>📄</span> <span class="btn-text">Inspector</span>
+          </button>
           <button id="btn-legal-corpora" class="ctrl-btn" title="Manage Official Legal Corpora (Ptk. &amp; Btk.)" style="display: none;">
             <span>⚖️</span> <span class="btn-text" data-i18n="navLegalCodes">Legal Codes</span>
           </button>
@@ -80,36 +113,178 @@
         </div>
       </header>
 
+      <!-- 2-Column Workspace Split: Middle Chat Area + Right Document Inspector -->
+      <div class="workspace-split" id="workspaceSplit">
 
-      <!-- Message Stream Area -->
-      <div class="messages-container" id="messages">
-        <div class="welcome" id="welcome">
-          <div class="welcome-logo-wrap">
-            <img src="/static/logo.png" alt="Platform Logo" class="welcome-logo hover:scale-105" id="welcome-logo" />
+        <!-- Middle Panel: Chat Column -->
+        <section class="chat-column" id="chatColumn">
+          <!-- Message Stream Area -->
+          <div class="messages-container" id="messages">
+            <div class="welcome" id="welcome">
+              <div class="welcome-logo-wrap">
+                <img src="/static/logo.png" alt="Platform Logo" class="welcome-logo hover:scale-105" id="welcome-logo" />
+              </div>
+              <div class="welcome-badge">✦ AI Knowledge Platform</div>
+              <h2 data-i18n="welcomeTitle">👋 How can I help you today?</h2>
+              <p data-i18n="welcomeText">Ask a question about your futures trading documents. Try one of these:</p>
+              <div class="suggestions-grid" id="suggestions"></div>
+            </div>
           </div>
-          <div class="welcome-badge">✦ AI Knowledge Platform</div>
-          <h2 data-i18n="welcomeTitle">👋 How can I help you today?</h2>
-          <p data-i18n="welcomeText">Ask a question about your futures trading documents. Try one of these:</p>
-          <div class="suggestions-grid" id="suggestions"></div>
+
+          <!-- Floating Composer -->
+          <footer class="composer-container">
+            <div class="composer-wrap">
+              <div class="composer-pill">
+                <div class="composer-left-tools">
+                  <button class="composer-tool-btn" id="composer-doc-btn" type="button" title="Inspect Citations">📄</button>
+                  <button class="composer-tool-btn" id="composer-prompt-btn" type="button" title="Prompt Suggestions">💡</button>
+                </div>
+                <textarea id="input" rows="1" placeholder="Type your question..." data-i18n-placeholder="placeholder"></textarea>
+                <button class="send-btn" id="send" title="Send message" aria-label="Send">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                </button>
+              </div>
+              <div class="composer-hint" data-i18n="hint">Press Enter to send · Shift+Enter for a new line</div>
+            </div>
+          </footer>
+        </section>
+
+        <!-- Right Panel: Document Inspector Pane (Panel 3 - In-workspace glass panel) -->
+        <aside class="doc-inspector-pane" id="docInspectorPane">
+          <div class="doc-inspector-header">
+            <div class="doc-inspector-title-box">
+              <span class="doc-inspector-icon" id="docViewerIcon">📄</span>
+              <div class="doc-inspector-meta">
+                <div class="doc-inspector-title-row">
+                  <h3 class="doc-inspector-title" id="docViewerTitle" data-i18n="docViewerTitle">Document Inspector</h3>
+                  <span class="doc-type-badge" id="docTypeBadge">TEXT</span>
+                </div>
+                <span class="doc-inspector-subtitle" id="docViewerSubtitle" data-i18n="docViewerSubtitle">Full Verified Document</span>
+              </div>
+            </div>
+            <div class="doc-inspector-actions">
+              <button class="inspector-action-btn view-pdf-btn" id="btn-view-pdf" title="View Original PDF in Fullscreen" style="display: none;">
+                <span class="btn-icon">📄</span> <span class="btn-label">View Original PDF</span>
+              </button>
+              <button class="inspector-action-btn active" id="btn-toggle-graph" title="Toggle Knowledge Graph Widget">🕸️</button>
+              <a id="docViewerDownloadBtn" class="inspector-action-btn" title="Download Document" download target="_blank">📥</a>
+              <button class="inspector-action-btn close-btn" id="docInspectorClose" title="Close Inspector">&times;</button>
+            </div>
+          </div>
+
+          <!-- Document Knowledge Graph Widget from image_cfc17b.jpg -->
+          <div class="doc-graph-card" id="docGraphWidget">
+            <div class="graph-card-header">
+              <div class="graph-card-title">
+                <span class="graph-icon">🕸️</span>
+                <span>DOCUMENT GRAPH</span>
+                <span class="graph-doc-pill" id="graphDocPill">Knowledge Nodes</span>
+                <button type="button" class="graph-info-btn" id="graphInfoBtn" title="Knowledge Graph: Visualizes how this document chunk connects to other referenced concepts and source files" aria-label="Graph Info">?</button>
+              </div>
+              <div class="graph-header-actions">
+                <button type="button" class="graph-expand-btn" id="btnExpandGraph" title="Expand Knowledge Graph Fullscreen" aria-label="Expand Graph">⛶</button>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <svg class="graph-svg" id="docGraphSvg" viewBox="0 0 380 95" preserveAspectRatio="xMidYMid meet">
+                <!-- Dynamically populated graph nodes -->
+              </svg>
+            </div>
+            <div class="graph-tooltip-popover hidden" id="graphTooltipPopover">
+              <strong>Knowledge Graph:</strong> Visualizes how this document chunk connects to other referenced concepts, statutory norms, and source files.
+            </div>
+          </div>
+
+          <!-- Document Content Reader -->
+          <div class="doc-inspector-body" id="docViewerBody">
+            <div id="docViewerLoading" class="doc-viewer-loading" style="display: none;">
+              <div class="spinner"></div>
+              <span data-i18n="docViewerLoading">Loading document preview…</span>
+            </div>
+            <div id="docViewerContent" class="doc-inspector-content">
+              <div class="inspector-placeholder">
+                <div class="placeholder-icon">📖</div>
+                <h4>Document Inspector</h4>
+                <p>Click any source citation badge in a response to view the verified legal text and highlighted clauses here.</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- High-Resolution Fullscreen PDF Viewer Modal -->
+  <div class="modal-overlay pdf-viewer-modal-overlay" id="modal-pdf-viewer">
+    <div class="modal-card pdf-viewer-card">
+      <div class="modal-header pdf-viewer-header">
+        <div class="pdf-header-meta">
+          <span class="pdf-file-icon">📕</span>
+          <div class="pdf-header-titles">
+            <h3 id="pdfModalTitle" class="pdf-modal-title">Document.pdf</h3>
+            <span id="pdfModalPageInfo" class="pdf-page-info">Original Source PDF</span>
+          </div>
+        </div>
+        <div class="pdf-header-controls">
+          <div class="pdf-zoom-group">
+            <button class="pdf-ctrl-btn" id="pdfZoomOut" title="Zoom Out (–)">−</button>
+            <span class="pdf-zoom-level" id="pdfZoomLevel">100%</span>
+            <button class="pdf-ctrl-btn" id="pdfZoomIn" title="Zoom In (+)">+</button>
+            <button class="pdf-ctrl-btn" id="pdfZoomReset" title="Reset Zoom to 100%">100%</button>
+          </div>
+          <a class="pdf-ctrl-btn" id="pdfModalDownloadBtn" title="Download Original PDF" download target="_blank">📥</a>
+          <button class="modal-close pdf-modal-close-btn" id="pdfModalClose" title="Close PDF Viewer">&times;</button>
         </div>
       </div>
+      <div class="pdf-viewer-body" id="pdfViewerBody">
+        <iframe id="pdfModalFrame" class="pdf-modal-frame" src="about:blank" title="PDF Full Preview"></iframe>
+      </div>
+    </div>
+  </div>
 
-      <!-- Floating Composer -->
-      <footer class="composer-container">
-        <div class="composer-wrap">
-          <div class="composer-pill">
-            <textarea id="input" rows="1" placeholder="Type your question..." data-i18n-placeholder="placeholder"></textarea>
-            <button class="send-btn" id="send" title="Send message" aria-label="Send">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="19" x2="12" y2="5"></line>
-                <polyline points="5 12 12 5 19 12"></polyline>
-              </svg>
-            </button>
+  <!-- Interactive High-Resolution Knowledge Graph Modal -->
+  <div class="modal-overlay graph-viewer-modal-overlay" id="modal-graph-viewer">
+    <div class="modal-card graph-viewer-card">
+      <div class="modal-header graph-viewer-header">
+        <div class="graph-header-meta">
+          <span class="graph-modal-icon">🕸️</span>
+          <div class="graph-header-titles">
+            <h3 id="graphModalTitle" class="graph-modal-title">Document Knowledge Graph</h3>
+            <span id="graphModalSubtitle" class="graph-modal-subtitle">Visualizing chunk-to-concept semantic mappings &amp; citation topology</span>
           </div>
-          <div class="composer-hint" data-i18n="hint">Press Enter to send · Shift+Enter for a new line</div>
         </div>
-      </footer>
-    </main>
+        <div class="graph-header-controls">
+          <div class="graph-legend-pills">
+            <span class="g-pill g-pill-query">QUERY</span>
+            <span class="g-pill g-pill-synth">SYNTHESIS</span>
+            <span class="g-pill g-pill-embed">EMBED</span>
+            <span class="g-pill g-pill-doc">DOC CHUNK</span>
+            <span class="g-pill g-pill-clause">CLAUSE §</span>
+            <span class="g-pill g-pill-norm">NORM</span>
+          </div>
+          <button class="modal-close graph-modal-close-btn" id="graphModalClose" title="Close Knowledge Graph">&times;</button>
+        </div>
+      </div>
+      <div class="graph-modal-body" id="graphModalBody">
+        <div class="graph-modal-canvas-wrap">
+          <svg class="graph-modal-svg" id="graphModalSvg" viewBox="0 0 760 380" preserveAspectRatio="xMidYMid meet">
+            <!-- Dynamically populated expanded graph -->
+          </svg>
+        </div>
+        <div class="graph-node-details-pane" id="graphNodeDetailsPane">
+          <div class="node-details-header">
+            <h4 id="nodeDetailTitle">Select a Node</h4>
+            <span id="nodeDetailBadge" class="node-type-badge">Entity</span>
+          </div>
+          <p id="nodeDetailDesc" class="node-detail-desc">Hover over or click any node in the graph above to inspect connected semantic concepts, source citations, and statutory norms.</p>
+          <div class="node-connections-list" id="nodeConnectionsList"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Multi-Step Onboarding Setup Modal -->
@@ -427,33 +602,6 @@
     </div>
   </div>
 
-  <!-- Interactive Document Viewer Modal -->
-  <div class="modal-overlay" id="docViewerModal">
-    <div class="modal-card doc-viewer-card max-w-6xl w-[90vw] h-[85vh]">
-      <div class="modal-header">
-        <div class="doc-viewer-title-box">
-          <span class="doc-viewer-icon" id="docViewerIcon">📄</span>
-          <div>
-            <h3 id="docViewerTitle" data-i18n="docViewerTitle">Document Preview</h3>
-            <span class="doc-viewer-subtitle" id="docViewerSubtitle" data-i18n="docViewerSubtitle">Full Document</span>
-          </div>
-        </div>
-        <div class="doc-viewer-actions">
-          <a id="docViewerDownloadBtn" class="btn-icon-action" title="Download Document" download target="_blank">
-            📥
-          </a>
-          <button class="modal-close" id="docViewerClose">&times;</button>
-        </div>
-      </div>
-      <div class="modal-body doc-viewer-body" id="docViewerBody">
-        <div id="docViewerLoading" class="doc-viewer-loading" style="display: none;">
-          <div class="spinner"></div>
-          <span data-i18n="docViewerLoading">Loading document preview…</span>
-        </div>
-        <div id="docViewerContent" class="doc-viewer-content w-full h-[75vh]"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- Embedding Benchmarks Modal -->
   <div class="modal-overlay" id="modal-benchmarks">

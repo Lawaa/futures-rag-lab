@@ -1102,6 +1102,128 @@ async def download_document(
     raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
 
 
+def _extract_page_or_file_text(
+    file_path: Path, target_page: int
+) -> tuple[str, int, int, str, str]:
+    """Extract full text and surrounding context lines for a document file."""
+    suffix = file_path.suffix.lower()
+    full_text = ""
+    total_pages = 1
+    page_num = target_page
+    preceding = ""
+    succeeding = ""
+
+    if suffix == ".pdf":
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(file_path))
+            total_pages = len(reader.pages)
+            p_idx = max(0, min(total_pages - 1, target_page - 1))
+            page_num = p_idx + 1
+            full_text = reader.pages[p_idx].extract_text() or ""
+
+            if p_idx > 0:
+                prev_text = reader.pages[p_idx - 1].extract_text() or ""
+                lines = [line.strip() for line in prev_text.splitlines() if line.strip()]
+                preceding = "\n".join(lines[-4:]) if lines else ""
+
+            if p_idx < total_pages - 1:
+                next_text = reader.pages[p_idx + 1].extract_text() or ""
+                lines = [line.strip() for line in next_text.splitlines() if line.strip()]
+                succeeding = "\n".join(lines[:4]) if lines else ""
+        except Exception as e:
+            logger.warning("Error reading PDF %s: %s", file_path.name, e)
+    else:
+        try:
+            full_text = file_path.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            logger.warning("Error reading file %s: %s", file_path.name, e)
+
+    return full_text, page_num, total_pages, preceding, succeeding
+
+
+def _expand_highlight_boundaries(
+    full_text: str, snippet: str, pre: str, post: str
+) -> tuple[str, str, str]:
+    """Expand snippet match to complete sentence boundaries and return surrounding context."""
+    if not full_text or not snippet:
+        return snippet or "", pre, post
+
+    clean_snip = snippet.strip()
+    idx = full_text.find(clean_snip)
+    if idx == -1:
+        short_needle = clean_snip[:40].strip()
+        idx = full_text.find(short_needle) if short_needle else -1
+
+    if idx == -1:
+        return clean_snip, pre, post
+
+    start = idx
+    while start > 0 and full_text[start - 1] not in ".!?":
+        if full_text[start - 1] == "\n" and start > 1 and full_text[start - 2] == "\n":
+            break
+        start -= 1
+    while start < idx and full_text[start].isspace():
+        start += 1
+
+    match_len = len(clean_snip) if full_text.find(clean_snip) != -1 else min(40, len(clean_snip))
+    end = min(len(full_text), idx + match_len)
+    while end < len(full_text) and full_text[end] not in ".!?":
+        if full_text[end] == "\n" and end + 1 < len(full_text) and full_text[end + 1] == "\n":
+            break
+        end += 1
+    if end < len(full_text) and full_text[end] in ".!?":
+        end += 1
+
+    highlight_text = full_text[start:end].strip()
+
+    preceding_context = pre
+    if not preceding_context and start > 0:
+        pre_chunk = full_text[max(0, start - 400):start]
+        lines = [line.strip() for line in pre_chunk.splitlines() if line.strip()]
+        preceding_context = "\n".join(lines[-3:]) if lines else ""
+
+    succeeding_context = post
+    if not succeeding_context and end < len(full_text):
+        post_chunk = full_text[end:min(len(full_text), end + 400)]
+        lines = [line.strip() for line in post_chunk.splitlines() if line.strip()]
+        succeeding_context = "\n".join(lines[:3]) if lines else ""
+
+    return highlight_text, preceding_context, succeeding_context
+
+
+@app.get("/documents/{filename}/context")
+async def get_document_context(
+    filename: str,
+    page: int | None = None,
+    snippet: str | None = None,
+    profile_id: str | None = None,
+) -> dict[str, Any]:
+    """Retrieve document text context with preceding/succeeding lines and full-sentence highlight."""
+    settings = get_settings()
+    file_path = _find_local_file(settings, filename, profile_id)
+    if not file_path:
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
+
+    full_text, target_page, total_pages, pre, post = _extract_page_or_file_text(
+        file_path, page or 1
+    )
+    highlight, preceding, succeeding = _expand_highlight_boundaries(
+        full_text, snippet or "", pre, post
+    )
+
+    return {
+        "filename": filename,
+        "page": target_page,
+        "total_pages": total_pages,
+        "full_text": full_text,
+        "highlight": highlight,
+        "preceding_context": preceding,
+        "succeeding_context": succeeding,
+    }
+
+
 class BenchmarkRunRequest(BaseModel):
     """Optional parameters for benchmark evaluation."""
 
