@@ -40,7 +40,14 @@ class Profile(BaseModel):
     name: str
     description: str = ""
     system_prompt: str | None = None
+    system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
+
+    def get_system_prompt(self, language: str = "en") -> str | None:
+        """Return language-specific system prompt or fall back to default system_prompt."""
+        if self.system_prompts and language in self.system_prompts:
+            return self.system_prompts[language]
+        return self.system_prompt
 
 
 class ProfileRegistry:
@@ -108,6 +115,7 @@ def _builtin_default() -> Profile:
         name="General Futures Assistant",
         description="General knowledge base built from the loaded documents.",
         system_prompt="You are an expert Futures Trading Assistant.",
+        system_prompts={},
         guardrails={"enforce_citations": False, "anonymize_phi": False},
     )
 
@@ -127,6 +135,7 @@ def _parse_profiles(raw: object) -> list[Profile]:
                 name=str(entry.get("name", profile_id)),
                 description=str(entry.get("description", "")),
                 system_prompt=entry.get("system_prompt"),
+                system_prompts=entry.get("system_prompts") or {},
                 guardrails=entry.get("guardrails") or {},
             )
         )

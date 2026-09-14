@@ -12,8 +12,12 @@
   {
     "id": "legal",
     "name": "Legal & Regulatory Compliance",
-    "description": "Regulatory compliance, master agreements, exchange rulebooks, disclosures, and legal liabilities.",
-    "system_prompt": "You are a seasoned Derivatives Legal and Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing regulatory frameworks (CFTC, NFA, MiFID II) and contractual clauses, and clarify jurisdiction and liability boundaries.",
+    "description": "Regulatory compliance, statutory codes (Ptk., Btk.), contracts, liability, and governance.",
+    "system_prompt": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
+    "system_prompts": {
+      "en": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
+      "hu": "Ön egy felkészült Magyar Jogi és Megfelelőségi Szakértő. Nyújtson szakszerű jogi elemzéseket, hivatkozzon a vonatkozó jogszabályi rendelkezésekre (különösen a Polgári Törvénykönyv és a Büntető Törvénykönyv pontos § szakaszaira), és határozza meg egyértelműen a felek jogait, kötelezettségeit, felelősségi határait és a jogkövetkezményeket."
+    },
     "guardrails": {
       "enforce_citations": true,
       "anonymize_phi": false

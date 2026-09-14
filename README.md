@@ -23,7 +23,12 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with **`uv`
 - **Live Pipeline Progress:** The web UI streams each retrieval stage (routing → preparing → retrieving → grading → answering) so users see what the assistant is doing
 - **Durable, Resumable State:** The retrieval graph persists per-conversation state via a LangGraph SQLite checkpointer (`RAG_ENABLE_CHECKPOINTING`, default on)
 - **Multi-Turn Context & Citation Retention:** Solves Self-RAG follow-up quote/citation loss; follow-up questions asking to "quote the exact text used above" or verify citations retain the prior turn's candidate documents and grounded citations without triggering outside-knowledge fallback disclaimers.
-- **Interactive Document Viewer Modal:** Full-width modal (`max-w-6xl` / `w-[90vw]`) with auto-fitting horizontal view (`FitH`), zoom controls, and native pagination toolbar for PDFs, plus in-document keyword & sentence highlighting for `.md` and `.txt` documents.
+- **Dynamic Legal Corpus Downloader & Caching:** Smart fetcher for official Hungarian statutory codes (Ptk. & Btk.) via `njt.hu` / Netjogtár structured text exports (> 500 KB clean §-structured text) with HTTP conditional validation (`ETag` / `Last-Modified`), caching manifest (`.legal_manifest.json`), ChromaDB tenant ingestion, and Web UI modal.
+- **Strict Legal Metadata Filtering & Corpus Isolation:** Eliminates false-positive citations by inspecting queries in the Legal profile: queries concerning civil law or "Polgári Törvénykönyv" (Ptk.) strictly boost and isolate `ptk_2013_v.txt`, suppressing irrelevant criminal law (`btk_2012_c.txt`) passages.
+- **Canonical Section Extraction & Highlighting:** Statutes automatically parse statutory section references (e.g., `section_id`: `6:58. §`) in citation payloads. The interactive Document Viewer Modal searches the DOM for section markers, highlights the full paragraph block with `<mark class="bg-yellow-400/40 text-current rounded px-1 font-semibold">`, and executes smooth auto-scrolling (`scrollIntoView({ behavior: 'smooth', block: 'center' })`).
+- **Generalized Legal & Compliance Counsel Persona:** Comprehensive Hungarian Legal & Compliance Counsel (*Magyar Jogi és Megfelelőségi Szakértő*) and broader English legal advisor in `profiles.json` with bilingual prompt support (`system_prompts`).
+- **Repository Clean-up:** Large downloaded legal text files and manifests (`data/legal/*.txt`, `data/legal/*.pdf`, `data/legal/.legal_manifest.json`) are strictly excluded via `.gitignore`.
+- **Interactive Document Viewer Modal:** Full-width modal (`max-w-6xl` / `w-[90vw]`) with auto-fitting horizontal view (`FitH`), zoom controls, and native pagination toolbar for PDFs, plus in-document statutory section & sentence highlighting for `.md` and `.txt` documents with auto-scroll into view.
 - **Custom Floating Domain Selector:** Sleek ChatGPT/Grok-inspired floating persona dropdown (`#domainDropdownMenu`) with theme-aware hover transitions (`hover:bg-slate-800/80` in dark mode, `hover:bg-slate-100` in light mode) and distinct active checkmark badges.
 - **Contextual Memory & Query Rewriting:** Reformulates ambiguous follow-up questions using chat history
 - **Rate-Limit Friendly:** One LLM instance is shared across every graph step, generation never triggers a second retrieval pass, and an optional client-side throttle (`RAG_LLM_REQUESTS_PER_MINUTE`) keeps you under provider quotas
@@ -46,6 +51,7 @@ The code is organized into small, single-responsibility layers under `src/`:
 | `credentials.py` | Secure API-key storage in the OS keyring |
 | `llm.py` / `embeddings.py` / `vector_store.py` | Model & retriever factories |
 | `manifest.py` / `ingest.py` | Change detection and the document ingestion pipeline (native `pypdf` + text loaders) |
+| `legal_fetcher.py` | Smart downloader, conditional ETag/Last-Modified caching, and ChromaDB vector store ingestion for statutory corpora |
 | `prompts.py` / `models.py` | Prompt templates (EN/HU: search, grade, rewrite, answer, groundedness, routing, multi-query) and domain data models |
 | `profiles.py` | Business/tenant profiles: per-profile system prompts and optional auto-routing |
 | `i18n.py` | User-facing text catalog for English and Hungarian |
@@ -55,6 +61,7 @@ The code is organized into small, single-responsibility layers under `src/`:
 | `bootstrap.py` | Wires settings, DB, checkpointer and service together |
 | `cli.py` / `api.py` | Unified startup wizard + interactive CLI, and the FastAPI interface |
 | `s3_service.py` | AWS S3 storage wrapper using `boto3` for streaming and remote file ops |
+
 
 Configuration can be overridden through environment variables (or a `.env` file),
 e.g. `RAG_LANGUAGE`, `RAG_GEMINI_MODEL`, `RAG_RETRIEVER_K`, `RAG_CHUNK_SIZE`, `RAG_API_PORT`,

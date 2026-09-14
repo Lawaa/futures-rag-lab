@@ -195,14 +195,21 @@ class RetrievalGraph:
             and profiles is not None
             and profiles.routable
         )
+        self._settings = settings
         target_language = language_name(settings.retrieval_language)
 
         self._search_chain = (
             get_search_query_prompt(target_language) | llm | StrOutputParser()
         )
+        self._search_hu_chain = (
+            get_search_query_prompt("Hungarian") | llm | StrOutputParser()
+        )
         self._grade_chain = get_grade_prompt() | llm | StrOutputParser()
         self._rewrite_chain = (
             get_rewrite_prompt(target_language) | llm | StrOutputParser()
+        )
+        self._rewrite_hu_chain = (
+            get_rewrite_prompt("Hungarian") | llm | StrOutputParser()
         )
         self._router_chain = (
             get_router_prompt() | llm | StrOutputParser()
@@ -217,6 +224,7 @@ class RetrievalGraph:
             else None
         )
         self._graph = self._build()
+
 
     def _entry_after_query(self) -> str:
         """Node reached after a (re)written query: fan-out first if enabled."""
@@ -243,6 +251,10 @@ class RetrievalGraph:
         logger.info("Routed question to profile '%s'.", profile.id)
         return {"profile_id": profile.id}
 
+    def _is_legal_hu_profile(self, profile_id: str | None) -> bool:
+        """Check if active profile is Legal with Hungarian language setting."""
+        return bool(profile_id == "legal" and self._settings.language == "hu")
+
     def _prepare_query(self, state: RetrievalState) -> dict:
         """Resolve references and translate the question into the corpus language."""
         question = state["question"]
@@ -256,7 +268,12 @@ class RetrievalGraph:
             if prior_summary:
                 query_question = f"[Context from prior turn:\n{prior_summary}]\n\n{question}"
 
-        query = self._search_chain.invoke(
+        chain = (
+            self._search_hu_chain
+            if self._is_legal_hu_profile(state.get("profile_id"))
+            else self._search_chain
+        )
+        query = chain.invoke(
             {"question": query_question, "chat_history": history}
         )
         return {
@@ -265,6 +282,7 @@ class RetrievalGraph:
             "prior_documents": prior_docs,
             "is_quote_followup": is_quote,
         }
+
 
     def _expand_queries(self, state: RetrievalState) -> dict:
         """Fan the prepared query out into several complementary variants."""
@@ -324,7 +342,12 @@ class RetrievalGraph:
 
     def _rewrite_query(self, state: RetrievalState) -> dict:
         """Reformulate a failed search query and count the retry."""
-        rewritten = self._rewrite_chain.invoke(
+        chain = (
+            self._rewrite_hu_chain
+            if self._is_legal_hu_profile(state.get("profile_id"))
+            else self._rewrite_chain
+        )
+        rewritten = chain.invoke(
             {"question": state["question"], "query": state["search_query"]}
         )
         retry_count = state.get("retry_count", 0) + 1
@@ -333,6 +356,7 @@ class RetrievalGraph:
             "search_query": _clean_query(rewritten) or state["search_query"],
             "retry_count": retry_count,
         }
+
 
     # -- routing --------------------------------------------------------------
     def _route_after_grade(self, state: RetrievalState) -> str:

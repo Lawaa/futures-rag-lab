@@ -228,13 +228,24 @@ The top navigation bar features a custom, floating persona menu (`#domainDropdow
   - Light Mode: `hover:bg-slate-100 hover:border-slate-300` with clear cursor styling (`cursor: pointer`).
 - **Active State:** The active domain persona maintains an accent border (`border-left: 3px solid var(--accent)`) and checkmark badge (`✓`) even when hovering over other options.
 
-### 8.2 Interactive Document Viewer Modal
-When users click on any source citation chip (`[document.pdf (Page X)]`):
+### 8.2 Interactive Document Viewer Modal & Text Highlighting
+When users click on any source citation chip (`[document.pdf (Page X)]` or text source):
 - **PDF Viewing:** Opens in a wide preview modal (`max-w-6xl`, `w-[90vw]`, `h-[85vh]`). The embedded PDF viewer auto-fits to the horizontal width and activates navigation tools via `#page=${pageNumber}&view=FitH&toolbar=1`.
-- **Markdown & Text Viewing:** Renders formatted content with sentence and phrase matches highlighted using `<mark class="bg-yellow-400/40">`, auto-centering the viewport on the cited text.
+- **Markdown & Text Viewing:** Renders formatted markdown safely, then scans the rendered DOM via a DOM TreeWalker to wrap the cited snippet/sentences with `<mark class="bg-yellow-400/40 text-current rounded px-1 font-semibold">` and smoothly auto-scrolls the highlighted passage into center view.
 
 ### 8.3 Multi-Turn Quote Context Retention
 When users ask follow-up questions asking to *"quote the exact text used above"* or verify statements from the preceding turn, the assistant automatically retains candidate document chunks from that turn. This prevents false empty retrieval results and preserves grounded source citations without triggering outside-knowledge fallbacks.
+
+### 8.4 Dynamic Legal Corpus Downloader & Caching (`src/legal_fetcher.py`)
+For legal compliance domains, the system includes built-in automated fetching and smart caching for statutory codes:
+- **Configured Corpora:** Hungarian Civil Code (Ptk. - 2013. évi V. törvény) and Criminal Code (Btk. - 2012. évi C. törvény).
+- **Smart Conditional Caching:** Uses fast HTTP `HEAD` checks with `ETag` and `Last-Modified` validation against `.legal_manifest.json`. If unchanged (`304 Not Modified` / cached hit), files are never re-downloaded.
+- **Tenant Vector Ingestion:** When synced or updated, corpora are automatically indexed into the isolated ChromaDB vector collection for the `legal` tenant profile.
+- **Interactive UI Modal:** The Web UI includes a "Legal Corpora" button (`#btn-legal-corpora`) that displays status badges (`Cached & Ready`, `Update Available`, `Available`), sync progress, and automatically prompts the user when switching to the legal profile if no local corpus is cached.
+
+### 8.5 Dynamic Chat Header Expansion
+The top navigation bar displays the active query title dynamically with flex expansion up to `36rem` (`max-w-xl`), replacing arbitrary cutoffs and applying smooth ellipsis only on narrow mobile viewports.
+
 
 ---
 

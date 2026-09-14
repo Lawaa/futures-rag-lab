@@ -91,7 +91,16 @@ def test_chat_returns_answer_and_sources() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == "Fake answer"
-    assert body["sources"] == [{"name": "doc.pdf", "page": 2, "snippet": None}]
+    assert body["sources"] == [
+        {
+            "name": "doc.pdf",
+            "page": 2,
+            "snippet": None,
+            "highlight_text": None,
+            "chunk_content": None,
+            "section_id": None,
+        }
+    ]
 
 
 def test_chat_rejects_empty_question() -> None:
@@ -496,6 +505,56 @@ def test_run_benchmarks_endpoint(monkeypatch) -> None:
     res = client.post("/benchmarks/run", json={"top_k": 3, "num_samples": 2})
     assert res.status_code == 200
     assert res.json()["status"] == "success"
+
+
+def test_get_legal_corpora_endpoint(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    import src.api as api
+
+    mock_mgr = MagicMock()
+    mock_mgr.get_available_corpora.return_value = [
+        {
+            "id": "ptk",
+            "name": "Ptk",
+            "description": "Civil Code",
+            "filename": "ptk.txt",
+            "status": "available",
+            "size_bytes": 0,
+            "last_synced": None,
+            "is_active": False,
+        }
+    ]
+    monkeypatch.setattr(api, "LegalCorpusManager", lambda *args, **kwargs: mock_mgr)
+
+    res = client.get("/legal/corpora")
+    assert res.status_code == 200
+    data = res.json()
+    assert "corpora" in data
+    assert len(data["corpora"]) == 1
+    assert data["corpora"][0]["id"] == "ptk"
+
+
+def test_sync_legal_corpora_endpoint(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    import src.api as api
+
+    mock_mgr = MagicMock()
+    mock_mgr.sync_selected_corpora.return_value = {
+        "status": "ok",
+        "synced": ["ptk"],
+        "errors": [],
+        "total_synced": 1,
+    }
+    monkeypatch.setattr(api, "LegalCorpusManager", lambda *args, **kwargs: mock_mgr)
+
+    res = client.post("/legal/sync", json={"active_corpora": ["ptk"]})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert data["synced"] == ["ptk"]
+    mock_mgr.sync_selected_corpora.assert_called_once_with(["ptk"])
+
+
 
 
 

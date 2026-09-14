@@ -10,6 +10,8 @@ never triggers a second retrieval pass.
 
 from __future__ import annotations
 
+import re
+
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -42,6 +44,25 @@ DEFAULT_SESSION_ID = "default_session"
 
 def _format_context(documents: list[Document]) -> str:
     return "\n\n".join(document.page_content for document in documents)
+
+
+def _filter_legal_documents(docs: list[Document], query: str) -> list[Document]:
+    """Filter or prioritize legal documents based on query intent."""
+    if not docs:
+        return docs
+    q = query.lower()
+    is_ptk = bool(re.search(r"\b(ptk|polgári|polgari|szerz[oöő]d|kötelmi|tulajdon|öröklés)\b", q))
+    is_btk = bool(re.search(r"\b(btk|b[uüű]ntet[oöő]|b[uüű]ncselekm[eé]ny|szabadságvesztés)\b", q))
+
+    if is_ptk and not is_btk:
+        ptk_docs = [d for d in docs if "ptk" in d.metadata.get("source", "").lower()]
+        if ptk_docs:
+            return ptk_docs
+    elif is_btk and not is_ptk:
+        btk_docs = [d for d in docs if "btk" in d.metadata.get("source", "").lower()]
+        if btk_docs:
+            return btk_docs
+    return docs
 
 
 class RagService:
@@ -95,20 +116,21 @@ class RagService:
         """Update or register a profile, persist to disk, and invalidate cached chains."""
         self._profiles = self._profiles.add_or_update(profile)
         self._profiles.save_to_disk(self._settings.profiles_path)
-        self._answer_chains.pop(profile.id, None)
+        self._answer_chains.clear()
 
     def _answer_chain(self, profile_id: str | None) -> Any:
         """Return the cached answer chain for a profile (built on first use)."""
         profile = self._profiles.get(profile_id)
-        chain = self._answer_chains.get(profile.id)
+        cache_key = (profile.id, self._settings.language)
+        chain = self._answer_chains.get(cache_key)
         if chain is None:
             prompt = get_qa_prompt(
                 self._settings.language,
-                profile.system_prompt,
+                profile.get_system_prompt(self._settings.language),
                 guardrails=profile.guardrails,
             )
             chain = prompt | self._llm | StrOutputParser()
-            self._answer_chains[profile.id] = chain
+            self._answer_chains[cache_key] = chain
         return chain
 
     # -- history --------------------------------------------------------------
@@ -190,13 +212,16 @@ class RagService:
             prior_documents=prior_docs,
         )
         docs = state.get("documents", [])
+        active_pid = state.get("profile_id") or profile_id or self._profiles.active_id
+        if active_pid == "legal":
+            docs = _filter_legal_documents(docs, question)
         if docs:
             self._session_documents[session_id] = list(docs)
         return RetrievalResult(
             standalone_question=state.get("search_query", question),
             documents=docs,
             retry_count=state.get("retry_count", 0),
-            profile_id=state.get("profile_id") or profile_id or self._profiles.active_id,
+            profile_id=active_pid,
         )
 
     # -- generation -----------------------------------------------------------
@@ -235,10 +260,10 @@ class RagService:
     def _get_fallback_sources(self, session_id: str) -> list[Source]:
         """Extract deduplicated sources from previous turn documents if available."""
         docs = self._session_documents.get(session_id, [])
-        seen: dict[tuple[str, int | None], Source] = {}
+        seen: dict[tuple[str, int | None, str | None], Source] = {}
         for doc in docs:
             src = Source.from_document(doc)
-            key = (src.name, src.page)
+            key = (src.name, src.page, src.section_id)
             if key not in seen:
                 seen[key] = src
         return list(seen.values())
@@ -351,6 +376,9 @@ class RagService:
                 yield {"type": "status", "stage": stage}
 
         retrieved_docs = final_state.get("documents", [])
+        active_pid = final_state.get("profile_id") or profile.id
+        if active_pid == "legal":
+            retrieved_docs = _filter_legal_documents(retrieved_docs, clean_q)
         if retrieved_docs:
             self._session_documents[session_id] = list(retrieved_docs)
 
@@ -358,7 +386,7 @@ class RagService:
             standalone_question=final_state.get("search_query", clean_q),
             documents=retrieved_docs,
             retry_count=final_state.get("retry_count", 0),
-            profile_id=final_state.get("profile_id") or profile.id,
+            profile_id=active_pid,
         )
 
         yield {"type": "status", "stage": "answering"}
@@ -385,6 +413,16 @@ class RagService:
         yield {
             "type": "done",
             "grounded": grounded,
-            "sources": [{"name": s.name, "page": s.page, "snippet": getattr(s, "snippet", None)} for s in sources],
+            "sources": [
+                {
+                    "name": s.name,
+                    "page": s.page,
+                    "snippet": getattr(s, "snippet", None),
+                    "highlight_text": getattr(s, "highlight_text", getattr(s, "snippet", None)),
+                    "chunk_content": getattr(s, "chunk_content", getattr(s, "snippet", None)),
+                    "section_id": getattr(s, "section_id", None),
+                }
+                for s in sources
+            ],
             "note": note,
         }

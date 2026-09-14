@@ -231,3 +231,26 @@ def test_checkpointer_persists_state_across_turns() -> None:
     graph.delete_thread("conv-1")
     assert saver.get({"configurable": {"thread_id": "conv-1"}}) is None
 
+
+def test_legal_hu_profile_bypasses_translation_to_english() -> None:
+    """Verify that for profile 'legal' and language 'hu', the Hungarian search chain is used."""
+    class LangAwareFake(RoutingFakeChatModel):
+        def _route(self, messages: list[BaseMessage]) -> str:
+            system = messages[0].content.lower() if messages else ""
+            if "query preparation assistant" in system:
+                if "written in hungarian" in system:
+                    return "polgári törvénykönyv szerződéskötés"
+                return "civil code contract formation"
+            return super()._route(messages)
+
+    retriever = RecordingRetriever([[_doc("6:58. § [A szerződés fogalma]")]])
+    llm = LangAwareFake(grade_response="yes")
+    settings = Settings(language="hu", retrieval_language="en")
+    graph = RetrievalGraph(llm, retriever, settings)
+
+    state = graph.run("mi a polgári törvénykönyv intézkedése?", [], profile_id="legal")
+
+    assert state["search_query"] == "polgári törvénykönyv szerződéskötés"
+    assert retriever.queries == ["polgári törvénykönyv szerződéskötés"]
+
+

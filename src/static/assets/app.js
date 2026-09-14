@@ -1,4 +1,5 @@
 // --- Localization Dictionary ---------------------------------------------
+// --- Localization Dictionary ---------------------------------------------
 const I18N = {
   en: {
     docTitle: "Futures Trading Assistant",
@@ -42,6 +43,79 @@ const I18N = {
     setupSaving: "Verifying…",
     setupInvalid: "That key was rejected. Please check it and try again.",
     setupError: "Could not save the key. Please try again.",
+
+    // Top Navigation
+    navLegalCodes: "Legal Codes",
+    navDomainConfig: "Domain Config",
+    navDocs: "Docs",
+
+    // Knowledge Base Modal
+    kbTitle: "Knowledge Base Manager",
+    kbUploadBtn: "Upload & Index",
+    thDoc: "Document",
+    thSize: "Size",
+    thUploaded: "Uploaded",
+    thActions: "Actions",
+    btnDelete: "Delete",
+    kbLoading: "Loading documents…",
+    kbEmpty: "No documents found for this profile.",
+    kbSelectFile: "Please select a file first.",
+    kbUploading: "Uploading & indexing…",
+    kbUploadSuccess: "Document uploaded and indexed successfully!",
+    kbUploadFail: "Upload failed.",
+
+    // Legal Corpus Modal
+    legalModalTitle: "Official Legal Codes (Ptk. & Btk.)",
+    legalModalSubtitle: "Hungarian Legal & Regulatory Compliance Corpus",
+    legalModalIntro: "Select the official legal statutes to cache and index into the Legal & Regulatory Compliance domain vector store. Cached statutes are checked conditionally via HTTP ETag to prevent redundant re-downloads.",
+    badgeCached: "Cached & Ready",
+    badgeUpdate: "Update Available",
+    badgeAvailable: "Available",
+    badgeDownloading: "Downloading...",
+    legalRemote: "Remote",
+    legalNotSynced: "Not synced yet",
+    legalSelectStatute: "Please select at least one legal statute to index.",
+    legalSyncing: "Syncing and indexing legal corpora…",
+    legalSuccess: "Legal statutes synced and indexed successfully!",
+    btnClose: "Close",
+    btnSyncLegal: "Sync & Index Selected Corpora 🚀",
+
+    // Settings Modal
+    settingsHeader: "⚙️ System Settings & Customization",
+    settingsBranding: "Branding & Identity",
+    settingsAppName: "Application Display Name",
+    settingsAppNameHint: "Updates the interface header, browser tab, and page branding live.",
+    settingsBtnSaveName: "Update Brand Name",
+    settingsAppearance: "Interface Appearance",
+    settingsColorTheme: "Color Theme",
+    settingsLanguage: "Language",
+    settingsBackend: "Backend Architecture",
+    settingsQuickSetup: "Quick Setup & Tools",
+    settingsRerunWizard: "🔄 Rerun Onboarding Wizard",
+    settingsDevTools: "Developer Tools & Benchmarks",
+    settingsViewBm: "📊 View Benchmark Analytics",
+    settingsRunBm: "⚡ Run Benchmark Evaluator",
+
+    // Document Viewer Modal
+    docViewerTitle: "Document Preview",
+    docViewerSubtitle: "Full Document",
+    docViewerLoading: "Loading document preview…",
+
+    // Sources Card
+    sourcesTitle: "Referenced Sources",
+    sourcesPillTitle: "Click to preview document",
+
+    // Profile Modal
+    profModalTitle: "🛡️ Tenant & Domain Profile",
+    profId: "Profile ID",
+    profName: "Display Name",
+    profDesc: "Description (Router summary)",
+    profPrompt: "System Prompt (Persona & Instructions)",
+    profGuardrails: "Domain Guardrails",
+    profGuardCitations: "Enforce Citations: Require explicit source document/page references for assertions",
+    profGuardPhi: "Anonymize PII/PHI: Automatically redact SSN, MRN, phone, email, and patient identifiers",
+    profBtnNew: "+ New Profile",
+    profBtnSave: "Save Profile",
   },
   hu: {
     docTitle: "Futures Kereskedési Tudástár",
@@ -85,8 +159,82 @@ const I18N = {
     setupSaving: "Ellenőrzés…",
     setupInvalid: "A kulcsot elutasította a szolgáltató. Ellenőrizze és próbálja újra.",
     setupError: "A kulcs mentése nem sikerült. Próbálja újra.",
+
+    // Top Navigation
+    navLegalCodes: "Törvénytár",
+    navDomainConfig: "Domain Beállítások",
+    navDocs: "Tudásbázis",
+
+    // Knowledge Base Modal
+    kbTitle: "Tudásbázis Kezelő",
+    kbUploadBtn: "Feltöltés és Indexelés",
+    thDoc: "Dokumentum",
+    thSize: "Méret",
+    thUploaded: "Feltöltve",
+    thActions: "Műveletek",
+    btnDelete: "Törlés",
+    kbLoading: "Dokumentumok betöltése…",
+    kbEmpty: "Nincsenek dokumentumok ehhez a profilhoz.",
+    kbSelectFile: "Kérjük, válasszon ki egy fájlt először.",
+    kbUploading: "Feltöltés és indexelés…",
+    kbUploadSuccess: "A dokumentum feltöltése és indexelése sikeres!",
+    kbUploadFail: "A feltöltés sikertelen.",
+
+    // Legal Corpus Modal
+    legalModalTitle: "Hivatalos Törvénykönyvek (Ptk. & Btk.)",
+    legalModalSubtitle: "Magyar Jogi és Megfelelőségi Törvénytár",
+    legalModalIntro: "Válassza ki a gyorsítótárazni és a Jogi és Megfelelőségi domain vektoradatbázisába indexelni kívánt hivatalos jogszabályokat. A mentett törvényeket a rendszer HTTP ETag alapján ellenőrzi, elkerülve a felesleges ismételt letöltéseket.",
+    badgeCached: "Gyorsítótárazva és Kész",
+    badgeUpdate: "Frissítés Elérhető",
+    badgeAvailable: "Elérhető",
+    badgeDownloading: "Letöltés...",
+    legalRemote: "Távoli",
+    legalNotSynced: "Még nincs szinkronizálva",
+    legalSelectStatute: "Kérjük, jelöljön ki legalább egy törvényt az indexeléshez.",
+    legalSyncing: "Törvénytár szinkronizálása és indexelése…",
+    legalSuccess: "A jogszabályok szinkronizálása és indexelése sikeresen befejeződött!",
+    btnClose: "Bezárás",
+    btnSyncLegal: "Kijelölt Törvények Szinkronizálása és Indexelése 🚀",
+
+    // Settings Modal
+    settingsHeader: "⚙️ Rendszerbeállítások és Testreszabás",
+    settingsBranding: "Márka és Megjelenés",
+    settingsAppName: "Alkalmazás Megjelenített Neve",
+    settingsAppNameHint: "A felület fejlécének, böngészőfülének és márkájának élő frissítése.",
+    settingsBtnSaveName: "Márkanév Frissítése",
+    settingsAppearance: "Felület Megjelenése",
+    settingsColorTheme: "Színtéma",
+    settingsLanguage: "Nyelv",
+    settingsBackend: "Háttérrendszer Architektúra",
+    settingsQuickSetup: "Gyors Beállítás és Eszközök",
+    settingsRerunWizard: "🔄 Bevezető Varázsló Újrafuttatása",
+    settingsDevTools: "Fejlesztői Eszközök és Benchmarkok",
+    settingsViewBm: "📊 Benchmark Elemzések Megtekintése",
+    settingsRunBm: "⚡ Benchmark Értékelő Futtatása",
+
+    // Document Viewer Modal
+    docViewerTitle: "Dokumentum Előnézet",
+    docViewerSubtitle: "Teljes Dokumentum",
+    docViewerLoading: "Dokumentum előnézet betöltése…",
+
+    // Sources Card
+    sourcesTitle: "Hivatkozott Források",
+    sourcesPillTitle: "Kattintson a dokumentum előnézetéhez",
+
+    // Profile Modal
+    profModalTitle: "🛡️ Bérlői és Domain Profil",
+    profId: "Profil Azonosító",
+    profName: "Megjelenített Név",
+    profDesc: "Leírás (Útválasztó összegzés)",
+    profPrompt: "Rendszerutasítás (Perszóna és Instrukciók)",
+    profGuardrails: "Domain Biztonsági Korlátok",
+    profGuardCitations: "Kötelező Hivatkozások: Konkrét forrásdokumentum- és oldalhivatkozások megkövetelése az állításokhoz",
+    profGuardPhi: "Személyes/Egészségügyi Adatok Anonimizálása: TAJ, azonosítók, telefonszám, email automatikus kitakarása",
+    profBtnNew: "+ Új Profil",
+    profBtnSave: "Profil Mentése",
   },
 };
+
 
 let LANG = "en";
 let T = I18N.en;
@@ -98,7 +246,7 @@ const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("send");
 const newChatBtn = document.getElementById("new-chat");
 const convEl = document.getElementById("conversations");
-const activeConvTitleEl = document.getElementById("active-conv-title");
+const activeConvTitleEl = document.getElementById("chatTitleHeader") || document.getElementById("active-conv-title");
 const appBrandNameEl = document.getElementById("app-brand-name");
 const appBrandSubtitleEl = document.getElementById("app-brand-subtitle");
 const sidebarEl = document.getElementById("sidebar");
@@ -192,6 +340,19 @@ const docViewerLoading = document.getElementById("docViewerLoading");
 const docViewerContent = document.getElementById("docViewerContent");
 const docViewerIcon = document.getElementById("docViewerIcon");
 
+// Legal Corpora Modal
+const modalLegalCorpus = document.getElementById("legalCorpusModal");
+const legalCorpusClose = document.getElementById("legalCorpusClose");
+const btnCloseLegalModal = document.getElementById("btn-close-legal-modal");
+const btnSyncLegalCorpora = document.getElementById("btn-sync-legal-corpora");
+const legalCorporaList = document.getElementById("legalCorporaList");
+const legalSyncProgressContainer = document.getElementById("legalSyncProgressContainer");
+const legalSyncProgressBar = document.getElementById("legalSyncProgressBar");
+const legalSyncStatus = document.getElementById("legalSyncStatus");
+const btnLegalCorpora = document.getElementById("btn-legal-corpora");
+let legalCorporaData = [];
+const currentTurnSources = new Map();
+
 const setupOverlay = document.getElementById("setup-overlay");
 const setupKeyEl = document.getElementById("setup-key");
 const setupSubmitEl = document.getElementById("setup-submit");
@@ -272,15 +433,26 @@ function applyLanguage() {
   if (settingLanguage) settingLanguage.value = LANG;
   applyTheme(getSavedTheme());
   renderSuggestions();
+  if (legalCorporaData && legalCorporaData.length > 0) {
+    renderLegalCorporaList();
+  }
 }
 
 if (settingLanguage) {
-  settingLanguage.addEventListener("change", (e) => {
+  settingLanguage.addEventListener("change", async (e) => {
     LANG = e.target.value;
     T = I18N[LANG] || I18N.en;
     applyLanguage();
+    try {
+      await fetch("/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: LANG }),
+      });
+    } catch (_) { /* ignore */ }
   });
 }
+
 
 // --- Utilities -----------------------------------------------------------
 function newId() {
@@ -506,21 +678,33 @@ function renderSources(container, sources) {
 
   const title = document.createElement("div");
   title.className = "sources-title";
-  title.textContent = "Referenced Sources";
+  title.textContent = T.sourcesTitle || "Referenced Sources";
   card.appendChild(title);
 
   const list = document.createElement("div");
   list.className = "sources-list";
+  currentTurnSources.clear();
   for (const s of sources) {
+    const snip = s.snippet || s.highlight_text || s.chunk_content;
+    const sectionId = s.section_id || null;
+    if (snip || sectionId) {
+      currentTurnSources.set(s.name.toLowerCase(), { snippet: snip, sectionId });
+      if (s.page != null) {
+        currentTurnSources.set(`${s.name.toLowerCase()}:${s.page}`, { snippet: snip, sectionId });
+      }
+    }
     const pill = document.createElement("span");
     pill.className = "source-chip source-pill-clickable";
     pill.setAttribute("role", "button");
     pill.setAttribute("tabindex", "0");
-    pill.title = "Click to preview document";
+    pill.title = T.sourcesPillTitle || "Click to preview document";
+
     const icon = s.name.toLowerCase().endsWith(".pdf") ? "📕" : (s.name.toLowerCase().endsWith(".md") ? "📝" : "📄");
-    pill.textContent = `${icon} ${s.name}${s.page != null ? " (p. " + s.page + ")" : ""}`;
+    const secLabel = sectionId ? ` [${sectionId}]` : "";
+    const pageLabel = s.page != null ? ` (p. ${s.page})` : "";
+    pill.textContent = `${icon} ${s.name}${secLabel}${pageLabel}`;
     pill.addEventListener("click", () => {
-      openDocumentViewer(s.name, s.page, s.snippet);
+      openDocumentViewer(s.name, s.page, snip, sectionId);
     });
     list.appendChild(pill);
   }
@@ -539,7 +723,7 @@ async function send(question) {
   setBusy(true);
 
   if (activeConvTitleEl && !activeConvTitleEl.dataset.isCustom) {
-    activeConvTitleEl.textContent = q.length > 32 ? q.slice(0, 32) + "…" : q;
+    activeConvTitleEl.textContent = q;
   }
 
   const { bubble } = addMessage("bot", "");
@@ -1007,6 +1191,9 @@ function updateActiveDomainTrigger() {
 function selectProfile(id) {
   currentProfileId = id;
   updateActiveDomainTrigger();
+  if (btnLegalCorpora) {
+    btnLegalCorpora.style.display = id === "legal" ? "inline-flex" : "none";
+  }
   if (domainDropdownMenu) {
     domainDropdownMenu.querySelectorAll(".domain-item").forEach((item) => {
       const isCurrent = item.dataset.profileId === id;
@@ -1014,6 +1201,9 @@ function selectProfile(id) {
       const checkEl = item.querySelector(".domain-item-check");
       if (checkEl) checkEl.textContent = isCurrent ? "✓" : "";
     });
+  }
+  if (id === "legal") {
+    checkAndPromptLegalCorpora();
   }
 }
 
@@ -1189,7 +1379,7 @@ btnKbManager.addEventListener("click", async () => {
 kbClose.addEventListener("click", () => modalKb.classList.remove("show"));
 
 async function loadKbDocuments() {
-  kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">Loading documents…</td></tr>';
+  kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">' + (T.kbLoading || "Loading documents…") + '</td></tr>';
   try {
     const res = await fetch(`/documents?profile_id=${encodeURIComponent(currentProfileId)}`);
     if (res.ok) {
@@ -1214,7 +1404,7 @@ function formatBytes(bytes) {
 function renderKbDocs(docs) {
   kbDocsList.innerHTML = "";
   if (docs.length === 0) {
-    kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">No documents found for this profile.</td></tr>';
+    kbDocsList.innerHTML = `<tr><td colspan="4" class="text-muted">${T.kbEmpty || "No documents found for this profile."}</td></tr>`;
     return;
   }
   for (const doc of docs) {
@@ -1224,11 +1414,12 @@ function renderKbDocs(docs) {
     const tdSize = document.createElement("td");
     tdSize.textContent = formatBytes(doc.size);
     const tdTime = document.createElement("td");
-    tdTime.textContent = doc.last_modified ? new Date(doc.last_modified).toLocaleDateString() : "-";
+    tdTime.textContent = doc.last_modified ? new Date(doc.last_modified).toLocaleDateString(LANG === "hu" ? "hu-HU" : "en-US") : "-";
     const tdActions = document.createElement("td");
     const delBtn = document.createElement("button");
     delBtn.className = "kb-btn-delete";
-    delBtn.textContent = "Delete";
+    delBtn.textContent = T.btnDelete || "Delete";
+    delBtn.title = T.btnDelete || "Delete";
     delBtn.addEventListener("click", async () => {
       if (!confirm(`Delete ${doc.filename}?`)) return;
       try {
@@ -1247,13 +1438,13 @@ function renderKbDocs(docs) {
 kbUploadBtn.addEventListener("click", async () => {
   const file = kbFileInput.files[0];
   if (!file) {
-    kbUploadStatus.textContent = "Please select a file first.";
+    kbUploadStatus.textContent = T.kbSelectFile || "Please select a file first.";
     kbUploadStatus.className = "status-msg error";
     return;
   }
   const formData = new FormData();
   formData.append("file", file);
-  kbUploadStatus.textContent = "Uploading & indexing…";
+  kbUploadStatus.textContent = T.kbUploading || "Uploading & indexing…";
   kbUploadStatus.className = "status-msg";
   kbUploadBtn.disabled = true;
   try {
@@ -1262,13 +1453,13 @@ kbUploadBtn.addEventListener("click", async () => {
       body: formData,
     });
     if (res.ok) {
-      kbUploadStatus.textContent = "Document uploaded and indexed successfully!";
+      kbUploadStatus.textContent = T.kbUploadSuccess || "Document uploaded and indexed successfully!";
       kbUploadStatus.className = "status-msg success";
       kbFileInput.value = "";
       await loadKbDocuments();
     } else {
       const err = await res.json().catch(() => ({}));
-      kbUploadStatus.textContent = err.detail || "Upload failed.";
+      kbUploadStatus.textContent = err.detail || T.kbUploadFail || "Upload failed.";
       kbUploadStatus.className = "status-msg error";
     }
   } catch (_) {
@@ -1279,56 +1470,121 @@ kbUploadBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Document Preview Modal & Highlighting --------------------------------
-function highlightSnippetInText(fullText, snippet) {
-  if (!snippet || !fullText) return fullText;
-  const cleanSnippet = snippet.trim();
-  if (cleanSnippet.length < 5) return fullText;
 
-  // Try exact match first
-  const exactIndex = fullText.indexOf(cleanSnippet);
-  if (exactIndex !== -1) {
-    const before = fullText.slice(0, exactIndex);
-    const match = fullText.slice(exactIndex, exactIndex + cleanSnippet.length);
-    const after = fullText.slice(exactIndex + cleanSnippet.length);
-    return `${before}<mark class="bg-yellow-400/40 text-current rounded px-1">${match}</mark>${after}`;
+// --- Document Preview Modal & Highlighting --------------------------------
+function highlightSnippetInElement(containerEl, snippet, sectionId = null) {
+  if (!containerEl) return false;
+
+  // 1. First, search DOM container for specific statutory section marker (e.g., "6:58. §")
+  let effectiveSec = sectionId ? sectionId.trim() : null;
+  if (!effectiveSec && snippet) {
+    const secMatch = snippet.match(/(\b\d+:\d+\.\s*§|\b\d+\.\s*§)/);
+    if (secMatch) effectiveSec = secMatch[1].trim();
   }
 
-  // Try matching sentences of snippet
-  const sentences = cleanSnippet.split(/(?<=[.!?\n])\s+/).filter((s) => s.trim().length > 15);
-  for (const sent of sentences) {
-    const sIndex = fullText.indexOf(sent.trim());
-    if (sIndex !== -1) {
-      const sMatch = fullText.slice(sIndex, sIndex + sent.trim().length);
-      return fullText.replace(
-        sMatch,
-        `<mark class="bg-yellow-400/40 text-current rounded px-1">${sMatch}</mark>`
-      );
+  if (effectiveSec) {
+    const normSec = effectiveSec.replace(/\s+/g, " ");
+    const secPattern = new RegExp(effectiveSec.replace(".", "\\.").replace(/\s+/g, "\\s*"));
+    const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while ((node = walker.nextNode())) {
+      const val = node.nodeValue || "";
+      if (val.includes(normSec) || secPattern.test(val)) {
+        const parent = node.parentElement;
+        const block = (parent && parent.closest("p, div, li, h1, h2, h3, h4, h5, h6")) || parent;
+        if (block && block !== containerEl) {
+          const mark = document.createElement("mark");
+          mark.className = "bg-yellow-400/40 text-current rounded px-1 font-semibold";
+          mark.innerHTML = block.innerHTML;
+          block.innerHTML = "";
+          block.appendChild(mark);
+          setTimeout(() => {
+            mark.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 150);
+          return true;
+        } else if (node.parentNode) {
+          const mark = document.createElement("mark");
+          mark.className = "bg-yellow-400/40 text-current rounded px-1 font-semibold";
+          mark.textContent = val;
+          node.parentNode.replaceChild(mark, node);
+          setTimeout(() => {
+            mark.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 150);
+          return true;
+        }
+      }
     }
   }
 
-  // Anchor match on first 50 characters
-  const anchor = cleanSnippet.slice(0, 50).trim();
-  const anchorIndex = fullText.indexOf(anchor);
-  if (anchorIndex !== -1) {
-    let endIdx = fullText.indexOf("\n", anchorIndex);
-    if (endIdx === -1 || endIdx - anchorIndex > 350) endIdx = anchorIndex + anchor.length;
-    const match = fullText.slice(anchorIndex, endIdx);
-    const before = fullText.slice(0, anchorIndex);
-    const after = fullText.slice(endIdx);
-    return `${before}<mark class="bg-yellow-400/40 text-current rounded px-1">${match}</mark>${after}`;
+  // 2. Fallback to candidate snippet/sentence matching
+  if (!snippet) return false;
+  const cleanSnippet = snippet.trim();
+  if (cleanSnippet.length < 5) return false;
+
+  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+  let node;
+  const textNodes = [];
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue && node.nodeValue.trim().length > 0) {
+      textNodes.push(node);
+    }
   }
 
-  return fullText;
+  const sentences = cleanSnippet
+    .split(/(?<=[.!?\n])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+
+  const candidates = [
+    cleanSnippet,
+    ...sentences,
+    cleanSnippet.slice(0, 50).trim(),
+    cleanSnippet.slice(0, 30).trim(),
+  ];
+
+  for (const target of candidates) {
+    if (!target || target.length < 6) continue;
+    for (const textNode of textNodes) {
+      const idx = textNode.nodeValue.indexOf(target);
+      if (idx !== -1) {
+        const before = textNode.nodeValue.substring(0, idx);
+        const match = textNode.nodeValue.substring(idx, idx + target.length);
+        const after = textNode.nodeValue.substring(idx + target.length);
+
+        const parent = textNode.parentNode;
+        if (!parent) continue;
+
+        const mark = document.createElement("mark");
+        mark.className = "bg-yellow-400/40 text-current rounded px-1 font-semibold";
+        mark.textContent = match;
+
+        const fragment = document.createDocumentFragment();
+        if (before) fragment.appendChild(document.createTextNode(before));
+        fragment.appendChild(mark);
+        if (after) fragment.appendChild(document.createTextNode(after));
+
+        parent.replaceChild(fragment, textNode);
+        setTimeout(() => {
+          mark.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
-window.openDocumentViewer = async function (filename, page = null, snippet = null) {
+window.openDocumentViewer = async function (filename, page = null, snippet = null, sectionId = null) {
   if (!docViewerModal) return;
   docViewerModal.classList.add("show");
 
   if (docViewerTitle) docViewerTitle.textContent = filename;
   if (docViewerSubtitle) {
-    docViewerSubtitle.textContent = page != null ? `Page ${page}` : "Full Document";
+    if (sectionId) {
+      docViewerSubtitle.textContent = page != null ? `${sectionId} (Page ${page})` : `${sectionId}`;
+    } else {
+      docViewerSubtitle.textContent = page != null ? `Page ${page}` : "Full Document";
+    }
   }
   if (docViewerDownloadBtn) {
     docViewerDownloadBtn.href = `/documents/${encodeURIComponent(filename)}/download?profile_id=${encodeURIComponent(currentProfileId)}`;
@@ -1352,6 +1608,19 @@ window.openDocumentViewer = async function (filename, page = null, snippet = nul
   }
 
   // Markdown or Text document
+  if (!snippet || !sectionId) {
+    const key = filename.toLowerCase();
+    const srcInfo = (page != null ? currentTurnSources.get(`${key}:${page}`) : null) || currentTurnSources.get(key);
+    if (srcInfo) {
+      if (typeof srcInfo === "object") {
+        if (!snippet) snippet = srcInfo.snippet;
+        if (!sectionId) sectionId = srcInfo.sectionId;
+      } else if (typeof srcInfo === "string" && !snippet) {
+        snippet = srcInfo;
+      }
+    }
+  }
+
   if (docViewerLoading) docViewerLoading.style.display = "flex";
   if (docViewerContent) docViewerContent.innerHTML = "";
 
@@ -1360,15 +1629,9 @@ window.openDocumentViewer = async function (filename, page = null, snippet = nul
     if (res.ok) {
       const rawText = await res.text();
       if (docViewerLoading) docViewerLoading.style.display = "none";
-      const processed = highlightSnippetInText(rawText, snippet);
       if (docViewerContent) {
-        docViewerContent.innerHTML = renderMarkdown(processed);
-        const markEl = docViewerContent.querySelector("mark");
-        if (markEl) {
-          setTimeout(() => {
-            markEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          }, 200);
-        }
+        docViewerContent.innerHTML = renderMarkdown(rawText);
+        highlightSnippetInElement(docViewerContent, snippet, sectionId);
       }
     } else {
       if (docViewerLoading) docViewerLoading.style.display = "none";
@@ -1387,6 +1650,153 @@ window.openDocumentViewer = async function (filename, page = null, snippet = nul
 if (docViewerClose) {
   docViewerClose.addEventListener("click", () => {
     if (docViewerModal) docViewerModal.classList.remove("show");
+  });
+}
+
+// --- Legal Corpora Management ---------------------------------------------
+async function loadLegalCorpora() {
+  if (!legalCorporaList) return;
+  try {
+    const res = await fetch("/legal/corpora");
+    if (res.ok) {
+      const data = await res.json();
+      legalCorporaData = data.corpora || [];
+      renderLegalCorporaList();
+    } else {
+      legalCorporaList.innerHTML = `<div class="status-msg error">Failed to load legal corpora list.</div>`;
+    }
+  } catch (err) {
+    legalCorporaList.innerHTML = `<div class="status-msg error">Error fetching legal corpora: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderLegalCorporaList() {
+  if (!legalCorporaList) return;
+  legalCorporaList.innerHTML = "";
+
+  if (legalCorporaData.length === 0) {
+    legalCorporaList.innerHTML = `<div class="text-muted">${T.legalNotSynced || "No legal corpora configured."}</div>`;
+    return;
+  }
+
+  for (const c of legalCorporaData) {
+    const item = document.createElement("label");
+    item.className = "legal-corpus-item";
+
+    const badgeClass = c.status === "cached" ? "badge-cached" : (c.status === "update_available" ? "badge-update" : "badge-available");
+    const badgeLabel = c.status === "cached" ? (T.badgeCached || "Cached & Ready") : (c.status === "update_available" ? (T.badgeUpdate || "Update Available") : (T.badgeAvailable || "Available"));
+
+    const sizeStr = c.size_bytes > 0 ? (c.size_bytes / 1024).toFixed(1) + " KB" : (T.legalRemote || "Remote");
+    const dateStr = c.last_synced ? new Date(c.last_synced).toLocaleString(LANG === "hu" ? "hu-HU" : "en-US") : (T.legalNotSynced || "Not synced yet");
+
+    item.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(c.id)}" ${c.is_active || c.status === "cached" ? "checked" : ""} />
+      <div class="legal-corpus-item-body">
+        <div class="legal-corpus-header-line">
+          <span class="legal-corpus-name">${escapeHtml(c.name)}</span>
+          <span class="legal-corpus-badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <div class="legal-corpus-desc">${escapeHtml(c.description)}</div>
+        <div class="legal-corpus-meta">
+          <span>📦 ${sizeStr}</span>
+          <span>🕒 ${dateStr}</span>
+        </div>
+      </div>
+    `;
+    legalCorporaList.appendChild(item);
+  }
+}
+
+async function checkAndPromptLegalCorpora() {
+  try {
+    const res = await fetch("/legal/corpora");
+    if (res.ok) {
+      const data = await res.json();
+      legalCorporaData = data.corpora || [];
+      renderLegalCorporaList();
+      const hasCached = legalCorporaData.some((c) => c.status === "cached" && c.is_active);
+      if (!hasCached && modalLegalCorpus) {
+        modalLegalCorpus.classList.add("show");
+      }
+    }
+  } catch (_) { /* ignore */ }
+}
+
+async function syncLegalCorpora() {
+  if (!legalCorporaList) return;
+  const checkboxes = legalCorporaList.querySelectorAll("input[type='checkbox']:checked");
+  const activeCorpora = Array.from(checkboxes).map((cb) => cb.value);
+
+  if (activeCorpora.length === 0) {
+    if (legalSyncProgressContainer) legalSyncProgressContainer.style.display = "block";
+    if (legalSyncStatus) {
+      legalSyncStatus.textContent = T.legalSelectStatute || "Please select at least one legal statute to index.";
+      legalSyncStatus.style.color = "var(--danger)";
+    }
+    return;
+  }
+
+  if (legalSyncProgressContainer) legalSyncProgressContainer.style.display = "block";
+  if (legalSyncProgressBar) legalSyncProgressBar.style.width = "40%";
+  if (legalSyncStatus) {
+    legalSyncStatus.textContent = T.legalSyncing || "Checking remote ETags & indexing into Legal vector store…";
+    legalSyncStatus.style.color = "var(--text-muted)";
+  }
+  if (btnSyncLegalCorpora) btnSyncLegalCorpora.disabled = true;
+
+  try {
+    const res = await fetch("/legal/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active_corpora: activeCorpora }),
+    });
+    if (legalSyncProgressBar) legalSyncProgressBar.style.width = "100%";
+    if (res.ok) {
+      const result = await res.json();
+      if (legalSyncStatus) {
+        legalSyncStatus.textContent = T.legalSuccess || result.message || "Legal statutes synced and indexed successfully!";
+        legalSyncStatus.style.color = "var(--success)";
+      }
+
+      await loadLegalCorpora();
+      setTimeout(() => {
+        if (modalLegalCorpus) modalLegalCorpus.classList.remove("show");
+        if (legalSyncProgressContainer) legalSyncProgressContainer.style.display = "none";
+      }, 1200);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (legalSyncStatus) {
+        legalSyncStatus.textContent = err.detail || "Sync failed.";
+        legalSyncStatus.style.color = "var(--danger)";
+      }
+    }
+  } catch (e) {
+    if (legalSyncStatus) {
+      legalSyncStatus.textContent = "Network error syncing legal corpora.";
+      legalSyncStatus.style.color = "var(--danger)";
+    }
+  } finally {
+    if (btnSyncLegalCorpora) btnSyncLegalCorpora.disabled = false;
+  }
+}
+
+if (legalCorpusClose) {
+  legalCorpusClose.addEventListener("click", () => {
+    if (modalLegalCorpus) modalLegalCorpus.classList.remove("show");
+  });
+}
+if (btnCloseLegalModal) {
+  btnCloseLegalModal.addEventListener("click", () => {
+    if (modalLegalCorpus) modalLegalCorpus.classList.remove("show");
+  });
+}
+if (btnSyncLegalCorpora) {
+  btnSyncLegalCorpora.addEventListener("click", syncLegalCorpora);
+}
+if (btnLegalCorpora) {
+  btnLegalCorpora.addEventListener("click", () => {
+    loadLegalCorpora();
+    if (modalLegalCorpus) modalLegalCorpus.classList.add("show");
   });
 }
 

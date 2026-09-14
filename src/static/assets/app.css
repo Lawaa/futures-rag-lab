@@ -340,6 +340,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -353,14 +355,18 @@ html, body {
   cursor: pointer;
 }
 
-.active-conv-crumb {
-  font-size: 0.92rem;
+.active-conv-crumb,
+#chatTitleHeader {
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  flex: 1;
+  min-width: 0;
+  max-width: 36rem;
+  padding-right: 1rem;
 }
 
 .topbar-controls {
@@ -1601,5 +1607,152 @@ mark {
   border-color: var(--primary);
   background: var(--hover-bg);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+/* Legal Corpus Selector Modal */
+.legal-corpus-card {
+  max-width: 680px;
+  width: 90vw;
+}
+
+.legal-corpus-intro {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.legal-corpora-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.legal-corpus-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.legal-corpus-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.legal-corpus-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+.legal-corpus-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.legal-corpus-header-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.legal-corpus-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legal-corpus-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.legal-corpus-badge.badge-cached {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.legal-corpus-badge.badge-update {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.legal-corpus-badge.badge-available {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.legal-corpus-badge.badge-downloading {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  animation: pulse 1.5s infinite;
+}
+
+.legal-corpus-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.legal-corpus-meta {
+  font-size: 0.73rem;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.legal-sync-progress-container {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-card);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #60a5fa);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.legal-sync-status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 

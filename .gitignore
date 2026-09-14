@@ -23,4 +23,10 @@ chroma_db/
 data/benchmark_*
 benchmark_dataset.json
 benchmark_report.md
-benchmark_results.json
+benchmark_results.json
+
+# Legal Corpora & Vector Stores
+data/legal/*.txt
+data/legal/*.pdf
+data/legal/.legal_manifest.json
+

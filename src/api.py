@@ -27,6 +27,7 @@ from .credentials import (
     store_api_key,
 )
 from .ingest import ingest_bytes_to_vector_db, ingest_file_to_vector_db
+from .legal_fetcher import LegalCorpusManager
 from .llm import is_authentication_error, validate_api_key
 from .logging_config import get_logger
 from .profiles import Profile
@@ -48,7 +49,7 @@ class NoCacheStaticFiles(StaticFiles):
     preventing an old ``app.js``/``app.css`` from lingering after an update.
     """
 
-    async def get_response(self, path: str, scope):
+    async def get_response(self, path: str, scope: Any) -> Any:
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
         return response
@@ -67,6 +68,9 @@ class SourceModel(BaseModel):
     name: str
     page: int | None = None
     snippet: str | None = None
+    highlight_text: str | None = None
+    chunk_content: str | None = None
+    section_id: str | None = None
 
 
 
@@ -145,6 +149,7 @@ class ProfileModel(BaseModel):
     name: str = Field(..., min_length=1)
     description: str = Field(default="")
     system_prompt: str | None = None
+    system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -240,7 +245,7 @@ def _build_service_state(app: FastAPI) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> Any:
     """Prepare the database and build the RAG service on startup."""
     _build_service_state(app)
     yield
@@ -503,7 +508,17 @@ async def chat(payload: ChatRequest, service: ServiceDep) -> ChatResponse:
 
     return ChatResponse(
         answer=answer.text,
-        sources=[SourceModel(name=s.name, page=s.page, snippet=getattr(s, "snippet", None)) for s in answer.sources],
+        sources=[
+            SourceModel(
+                name=s.name,
+                page=s.page,
+                snippet=getattr(s, "snippet", None),
+                highlight_text=getattr(s, "highlight_text", getattr(s, "snippet", None)),
+                chunk_content=getattr(s, "chunk_content", getattr(s, "snippet", None)),
+                section_id=getattr(s, "section_id", None),
+            )
+            for s in answer.sources
+        ],
         grounded=answer.grounded,
     )
 
@@ -518,7 +533,7 @@ async def chat_stream(payload: ChatRequest, service: ServiceDep) -> StreamingRes
     except TypeError:
         retrieval = service.retrieve(payload.question, payload.session_id)
 
-    def token_generator():
+    def token_generator() -> Any:
         try:
             yield from service.stream_answer(
                 payload.question, retrieval, payload.session_id, profile_id=payload.profile_id
@@ -538,7 +553,7 @@ async def chat_events(payload: ChatRequest, service: ServiceDep) -> StreamingRes
     show live retrieval progress before the answer streams in.
     """
 
-    def event_generator():
+    def event_generator() -> Any:
         try:
             try:
                 events = service.stream_events(
@@ -631,6 +646,7 @@ async def list_profiles(service: ServiceDep) -> ProfileListResponse:
                 name=p.name,
                 description=p.description,
                 system_prompt=p.system_prompt,
+                system_prompts=p.system_prompts,
                 guardrails=p.guardrails,
             )
             for p in registry.list_profiles()
@@ -646,6 +662,7 @@ async def create_profile(payload: ProfileModel, service: ServiceDep) -> dict[str
         name=payload.name,
         description=payload.description,
         system_prompt=payload.system_prompt,
+        system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,
     )
     service.update_profile(profile)
@@ -662,10 +679,49 @@ async def update_profile(
         name=payload.name,
         description=payload.description,
         system_prompt=payload.system_prompt,
+        system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,
     )
     service.update_profile(profile)
     return {"status": "updated", "profile_id": profile.id}
+
+
+# --- Legal Corpora Management Endpoints --------------------------------------
+
+
+class LegalSyncRequest(BaseModel):
+    """Request payload for syncing legal corpora."""
+
+    active_corpora: list[str] = Field(default_factory=lambda: ["ptk", "btk"])
+
+
+@app.get("/legal/corpora")
+async def get_legal_corpora() -> dict[str, Any]:
+    """Return available legal corpora, download status, file sizes, and last synced timestamps."""
+    manager = LegalCorpusManager(get_settings())
+    corpora = manager.get_available_corpora()
+    return {"corpora": corpora}
+
+
+@app.post("/legal/sync")
+async def sync_legal_corpora(
+    payload: LegalSyncRequest,
+    service: ServiceDep,
+) -> dict[str, Any]:
+    """Sync specified legal corpora (Ptk., Btk.) and ingest into the legal profile vector store."""
+    manager = LegalCorpusManager(get_settings())
+    result = await run_in_threadpool(manager.sync_selected_corpora, payload.active_corpora)
+    return {
+        "status": result.get("status", "ok"),
+        "synced": result.get("synced", []),
+        "errors": result.get("errors", []),
+        "total_synced": result.get("total_synced", 0),
+        "message": (
+            "Legal corpora synced and indexed successfully."
+            if not result.get("errors")
+            else "Partial sync completed."
+        ),
+    }
 
 
 # --- Document Management Endpoints -------------------------------------------
