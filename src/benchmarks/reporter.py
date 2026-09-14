@@ -12,11 +12,42 @@ from typing import Sequence
 from .evaluator import BenchmarkResult, BenchmarkSuiteResult
 
 
+def compute_composite_score(r: BenchmarkResult) -> float:
+    """Calculate an overall benchmark score out of 100.
+
+    Weights:
+    - 45% NDCG@K (ranking precision)
+    - 30% MRR@K (reciprocal rank of first relevant item)
+    - 15% Hit Rate@K (overall recall)
+    - 10% Hardware efficiency (latency & throughput balance)
+    """
+    if r.status != "success":
+        return 0.0
+
+    quality = (0.45 * r.ndcg_at_k + 0.30 * r.mrr_at_k + 0.15 * r.hit_rate_at_k) * 100.0
+
+    # Latency penalty: 0 if <= 10ms, scales up to -5 if latency is high
+    lat_penalty = max(0.0, min(5.0, (r.latency_p50_ms - 10.0) / 20.0))
+    # Throughput bonus: scales up to +5 for high indexing speed
+    tput_bonus = max(0.0, min(5.0, r.indexing_throughput_chunks_per_sec / 20.0))
+
+    composite = quality - lat_penalty + tput_bonus
+    return round(max(0.0, min(100.0, composite)), 2)
+
+
 class BenchmarkReporter:
     """Formats and exports benchmark evaluation results."""
 
     @staticmethod
-    def format_terminal_table(suite: BenchmarkSuiteResult) -> str:
+    def get_ranked_winners(suite: BenchmarkSuiteResult) -> list[tuple[int, BenchmarkResult, float]]:
+        """Rank successful models by composite score."""
+        successful = [r for r in suite.results if r.status == "success"]
+        scored = [(r, compute_composite_score(r)) for r in successful]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [(rank, r, score) for rank, (r, score) in enumerate(scored, start=1)]
+
+    @classmethod
+    def format_terminal_table(cls, suite: BenchmarkSuiteResult) -> str:
         """Format benchmark results as a clean ASCII table for terminal display."""
         headers = [
             "Model",
@@ -83,6 +114,18 @@ class BenchmarkReporter:
             lines.append(make_row(row))
         lines.append("=" * (sum(col_widths) + 3 * (len(headers) - 1)))
 
+        # Top 3 winners section
+        winners = cls.get_ranked_winners(suite)[:3]
+        if winners:
+            lines.append("\nTOP 3 PODIUM RANKING:")
+            medals = ["1st (Gold)", "2nd (Silver)", "3rd (Bronze)"]
+            for idx, (_, r, score) in enumerate(winners):
+                label = medals[idx] if idx < len(medals) else f"#{idx+1}"
+                lines.append(
+                    f"  [{label}] {r.model_name} | Score: {score:.1f}/100 | "
+                    f"NDCG@{suite.top_k}: {r.ndcg_at_k:.3f} | Latency: {r.latency_p50_ms:.1f}ms | RAM: {r.peak_ram_mb:.0f}MB"
+                )
+
         # Add failed details if any
         failures = [r for r in suite.results if r.status != "success"]
         if failures:
@@ -104,16 +147,19 @@ class BenchmarkReporter:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(suite.model_dump_json(indent=2), encoding="utf-8")
 
-    @staticmethod
+    @classmethod
     def export_markdown_report(
+        cls,
         suite: BenchmarkSuiteResult,
         path: Path | str = "./data/benchmark_report.md",
     ) -> None:
-        """Generate a detailed Markdown evaluation report."""
+        """Generate a detailed Markdown evaluation report with Top 3 winners."""
         target_path = Path(path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         k = suite.top_k
+        winners = cls.get_ranked_winners(suite)
+
         lines = [
             "# Embedding Model Benchmark Report",
             "",
@@ -121,11 +167,40 @@ class BenchmarkReporter:
             f"**Indexed Corpus:** {suite.total_documents} documents ({suite.total_chunks} chunks)  ",
             f"**Evaluation Rank Depth (Top-K):** {k}  ",
             "",
+        ]
+
+        # Top 3 Winners Section
+        if winners:
+            lines.extend([
+                "## 🏆 Overall Winners & Top 3 Ranking",
+                "",
+                "Models are ranked based on a composite evaluation balancing retrieval quality (NDCG, MRR, Hit Rate) and hardware efficiency (latency & throughput).",
+                "",
+                "| Rank | Model | Composite Score | Retrieval Quality (Hit / MRR / NDCG) | Latency (p50) | RAM | Deployment Verdict |",
+                "| :---: | :--- | :---: | :---: | :---: | :---: | :--- |",
+            ])
+            medals = ["🥇 **1st Place (Champion)**", "🥈 **2nd Place (Runner-up)**", "🥉 **3rd Place (Bronze)**"]
+            verdicts = [
+                "**Primary Recommendation:** Superior retrieval accuracy and top-ranked search precision.",
+                "**High-Efficiency Alternative:** Excellent balance between throughput and semantic precision.",
+                "**Lightweight Runner-up:** Fast indexing and minimal memory footprint.",
+            ]
+            for idx, (_, r, score) in enumerate(winners[:3]):
+                medal = medals[idx] if idx < len(medals) else f"**#{idx+1}**"
+                verdict = verdicts[idx] if idx < len(verdicts) else "Solid candidate for specific workloads."
+                lines.append(
+                    f"| {medal} | **`{r.model_name}`** | **{score:.1f} / 100** | "
+                    f"{r.hit_rate_at_k:.3f} / {r.mrr_at_k:.3f} / {r.ndcg_at_k:.3f} | "
+                    f"{r.latency_p50_ms:.1f} ms | {r.peak_ram_mb:.0f} MB | {verdict} |"
+                )
+            lines.append("")
+
+        lines.extend([
             "## 1. Executive Summary",
             "",
             "| Model | Retrieval Quality (Hit Rate) | MRR | NDCG | Latency p50 | Latency p95 | Indexing Throughput | Peak RAM | CPU % | Status |",
             "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
-        ]
+        ])
 
         for r in suite.results:
             if r.status == "success":

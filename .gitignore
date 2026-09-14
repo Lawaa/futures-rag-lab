@@ -18,3 +18,9 @@ chroma_db/
 
 # Local configuration files
 .env
+
+# Benchmark outputs and datasets
+data/benchmark_*
+benchmark_dataset.json
+benchmark_report.md
+benchmark_results.json
