@@ -870,7 +870,7 @@ window.copyCode = function (btn) {
 // --- Message Rendering & Welcome -----------------------------------------
 function renderWelcome() {
   messagesEl.innerHTML = "";
-  closeDocumentInspector();
+  resetInspectorState();
 
   const appLayout = document.getElementById("appLayout");
   if (appLayout) appLayout.classList.remove("has-active-chat");
@@ -940,7 +940,11 @@ function addMessage(role, text, opts) {
     cardHeader.className = "msg-card-header";
     cardHeader.innerHTML = `
       <div class="ai-header-left">
-        <div class="ai-emblem">✦</div>
+        <svg class="ai-emblem-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="var(--accent-primary, #06b6d4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="var(--accent-primary, #06b6d4)" fill-opacity="0.2"/>
+          <path d="M2 17L12 22L22 17" stroke="var(--accent-secondary, #8b5cf6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 12L12 17L22 12" stroke="var(--accent-primary, #06b6d4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
         <span class="ai-header-title">AI generated synthesis</span>
       </div>
       <span class="ai-status-pill">Active RAG</span>
@@ -1155,6 +1159,8 @@ newChatBtn.addEventListener("click", startNewChat);
 
 function startNewChat() {
   currentId = newId();
+  currentTurnSources.clear();
+  resetInspectorState();
   renderWelcome();
   highlightActive();
   inputEl.focus();
@@ -1237,6 +1243,8 @@ async function loadConversations() {
 async function openConversation(id, title) {
   if (busy) return;
   currentId = id;
+  currentTurnSources.clear();
+  resetInspectorState();
   if (activeConvTitleEl) {
     activeConvTitleEl.textContent = title || "Conversation";
     activeConvTitleEl.dataset.isCustom = "true";
@@ -2195,6 +2203,38 @@ function closeDocumentInspector() {
     const appLayout = document.getElementById("appLayout");
     if (appLayout) appLayout.classList.remove("inspector-open");
   }
+}
+
+function resetInspectorState() {
+  closeDocumentInspector();
+  // Reset inspector content to placeholder
+  if (docViewerContent) {
+    docViewerContent.innerHTML = `
+      <div class="inspector-placeholder">
+        <div class="placeholder-icon">📖</div>
+        <h4>Document Inspector</h4>
+        <p>Click any source citation badge in a response to view the verified legal text and highlighted clauses here.</p>
+      </div>
+    `;
+  }
+  // Reset inspector header metadata
+  if (docViewerTitle) docViewerTitle.textContent = T.docViewerTitle || "Document Inspector";
+  if (docViewerSubtitle) docViewerSubtitle.textContent = T.docViewerSubtitle || "Full Verified Document";
+  if (docTypeBadge) docTypeBadge.textContent = "TEXT";
+  if (docViewerIcon) docViewerIcon.textContent = "📄";
+  if (docViewerLoading) docViewerLoading.style.display = "none";
+  // Reset graph widget to initial state
+  if (docGraphSvg) docGraphSvg.innerHTML = "";
+  if (graphTooltipPopover) graphTooltipPopover.classList.add("hidden");
+  // Reset node detail inspector
+  if (nodeDetailTitle) nodeDetailTitle.textContent = "";
+  if (nodeDetailBadge) nodeDetailBadge.textContent = "";
+  if (nodeDetailDesc) nodeDetailDesc.textContent = "";
+  if (nodeConnectionsList) nodeConnectionsList.innerHTML = "";
+  // Clear active file references and turn sources
+  activePdfFilename = null;
+  activePdfPage = 1;
+  currentTurnSources.clear();
 }
 
 function escapeRegex(string) {
