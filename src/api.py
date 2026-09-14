@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
@@ -1102,6 +1103,15 @@ async def download_document(
     raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
 
 
+def _clean_extracted_text(text: str) -> str:
+    """Clean extracted document text by stripping isolated orphan numbers on lines."""
+    if not text:
+        return ""
+    # Strip standalone digits appearing alone on their own lines (e.g. "10\n", "  9  \n")
+    cleaned = re.sub(r"(?m)^\s*\d+\s*$\n?", "", text)
+    return cleaned.strip()
+
+
 def _extract_pdf_page_data(
     file_path: Path, target_page: int
 ) -> tuple[str, int, int, str, str]:
@@ -1111,17 +1121,17 @@ def _extract_pdf_page_data(
     total_pages = len(reader.pages)
     p_idx = max(0, min(total_pages - 1, target_page - 1))
     page_num = p_idx + 1
-    full_text = reader.pages[p_idx].extract_text() or ""
+    full_text = _clean_extracted_text(reader.pages[p_idx].extract_text() or "")
     preceding = ""
     succeeding = ""
 
     if p_idx > 0:
-        prev_text = reader.pages[p_idx - 1].extract_text() or ""
+        prev_text = _clean_extracted_text(reader.pages[p_idx - 1].extract_text() or "")
         lines = [line.strip() for line in prev_text.splitlines() if line.strip()]
         preceding = "\n".join(lines[-4:]) if lines else ""
 
     if p_idx < total_pages - 1:
-        next_text = reader.pages[p_idx + 1].extract_text() or ""
+        next_text = _clean_extracted_text(reader.pages[p_idx + 1].extract_text() or "")
         lines = [line.strip() for line in next_text.splitlines() if line.strip()]
         succeeding = "\n".join(lines[:4]) if lines else ""
 

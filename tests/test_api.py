@@ -613,16 +613,33 @@ def test_ui_components_for_inspector_and_graph() -> None:
     assert 'id="setting-accent-secondary"' in html
     assert 'id="btn-reset-accents"' in html
 
+    # Verify Universal Full Document Viewer elements for all formats
+    assert 'id="btn-view-full-doc"' in html
+    assert 'id="univTextContainer"' in html
+    assert 'id="univTextContent"' in html
+
     css_res = client.get("/static/assets/app.css")
     assert css_res.status_code == 200
     css = css_res.text
-    # Verify Midnight atmosphere and dynamic 2-color accent variables
+    # Verify Midnight atmosphere, dynamic 2-color accent variables & RGB channels
     assert "--accent-primary: #38bdf8;" in css
     assert "--accent-secondary: #c084fc;" in css
+    assert "--accent-primary-rgb: 56, 189, 248;" in css
+    assert "--accent-secondary-rgb: 192, 132, 252;" in css
+    assert "--luminous-border-cyan:" in css
+    assert "--edge-glow-cyan:" in css
+    assert ".full-doc-highlight" in css
+    assert ".legal-clause-token" in css
     assert "--bg-primary: #0A0E1A;" in css
     assert "window-controls" not in css
     assert ".graph-canvas-legend" in css
     assert ".accent-color-pickers-row" in css
+
+    # Verify Light Mode canvas background synchronization
+    assert '[data-theme="light"] .app-layout' in css
+    assert '[data-theme="light"] .main-panel' in css
+    assert '[data-theme="light"] .composer-container' in css
+    assert ".view-full-doc-btn" in css
 
     js_res = client.get("/static/assets/app.js")
     assert js_res.status_code == 200
@@ -630,6 +647,10 @@ def test_ui_components_for_inspector_and_graph() -> None:
     assert "applyAccentColors" in js
     assert "initAccentColors" in js
     assert "ACCENT_PRESETS" in js
+    assert "openUniversalDocumentViewer" in js
+    assert "sanitizeDocumentText" in js
+    # Verify single consolidated full doc action button (redundant button removed)
+    assert "extractedViewFullDocBtn" not in js
 
 
 

@@ -492,6 +492,17 @@ function hexToRgba(hex, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function hexToRgbValues(hex) {
+  let clean = (hex || "#38bdf8").replace("#", "");
+  if (clean.length === 3) clean = clean.split("").map(c => c + c).join("");
+  const num = parseInt(clean, 16);
+  if (isNaN(num)) return "56, 189, 248";
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `${r}, ${g}, ${b}`;
+}
+
 function getSavedAccentColors() {
   const primary = localStorage.getItem("rag_accent_primary") || DEFAULT_ACCENT_PRIMARY;
   const secondary = localStorage.getItem("rag_accent_secondary") || DEFAULT_ACCENT_SECONDARY;
@@ -502,6 +513,8 @@ function applyAccentColors(primary, secondary, save = true) {
   const root = document.documentElement;
   root.style.setProperty("--accent-primary", primary);
   root.style.setProperty("--accent-secondary", secondary);
+  root.style.setProperty("--accent-primary-rgb", hexToRgbValues(primary));
+  root.style.setProperty("--accent-secondary-rgb", hexToRgbValues(secondary));
   root.style.setProperty("--accent-primary-glow", hexToRgba(primary, 0.35));
   root.style.setProperty("--accent-secondary-glow", hexToRgba(secondary, 0.35));
   root.style.setProperty("--accent", primary);
@@ -698,8 +711,15 @@ function renderInline(s) {
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
     (_, t, u) => '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + "</a>"
   );
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  // Match standard paired double asterisks and underscores across lines
+  s = s.replace(/\*\*([\s\S]+?)\*\*/g, '<strong class="font-bold">$1</strong>');
+  s = s.replace(/__([\s\S]+?)__/g, '<strong class="font-bold">$1</strong>');
+
+  // Handle unclosed bold markers (e.g. "**After the initial..." or "**Note:...") up to sentence boundary or tag/line end
+  s = s.replace(/\*\*([^*<]+?)(?=[.!?]|<|$)/g, '<strong class="font-bold">$1</strong>');
+  // Strip any remaining stray asterisks
+  s = s.replace(/\*\*/g, "");
+
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
   s = s.replace(/(^|[^_\w])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
   s = s.replace(
@@ -718,12 +738,28 @@ function renderInline(s) {
       return `<span class="source-chip source-pill-clickable neon-pill neon-pill-violet" onclick="openDocumentViewer('${docName}', null, null, '${escapeHtml(sec)}')" title="Inspect Legal Section in Inspector">⚖️ ${escapeHtml(sec)}</span>`;
     }
   );
+  s = s.replace(/(\b\d+:\d+\.?\s*§(?:\s*\[[^\]]+\])?)/g, '<span class="legal-clause-token">$1</span>');
   s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[+i] + "</code>");
   return s;
 }
 
+function sanitizeDocumentText(rawText) {
+  if (!rawText) return "";
+  let text = String(rawText);
+  text = text.replace(/\\n/g, "\n").replace(/\\r/g, "");
+  text = text.replace(/[\u00A0\u1680\u180e\u2000-\u200a\u202f\u205f\u3000\ufeff]/g, " ");
+  text = text.replace(/[\u200B-\u200D]/g, "");
+  // Strip isolated standalone line/page numbers on their own lines (e.g., "\n10\n" or "^10\n")
+  text = text.replace(/(^|\n)\s*\d+\s*(?=\n|$)/g, "$1");
+  text = text.replace(/^\s*\d+\s*\n/g, "");
+  text = text.replace(/(\d+:\d+\.?)\s*§/g, "$1 §");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
+
 function renderMarkdown(src) {
-  const lines = escapeHtml(src).replace(/\r\n/g, "\n").split("\n");
+  const clean = sanitizeDocumentText(src);
+  const lines = escapeHtml(clean).replace(/\r\n/g, "\n").split("\n");
   const out = [];
   const stack = [];
   let i = 0;
@@ -763,6 +799,14 @@ function renderMarkdown(src) {
       closeTo(0);
       const lvl = Math.min(h[1].length, 3);
       out.push("<h" + lvl + ">" + renderInline(h[2]) + "</h" + lvl + ">");
+      i++;
+      continue;
+    }
+
+    const legalSec = line.match(/^\s*(\d+:\d+\.?\s*§.*?)$/);
+    if (legalSec) {
+      closeTo(0);
+      out.push('<div class="legal-section-header">⚖️ ' + renderInline(legalSec[1]) + '</div>');
       i++;
       continue;
     }
@@ -1815,7 +1859,10 @@ function highlightSnippetInElement(containerEl, snippet, sectionId = null) {
 
   // 2. Candidate sentence matching with sentence-boundary expansion
   if (!snippet) return false;
-  const cleanSnippet = snippet.trim();
+  const cleanSnippet = snippet
+    .replace(/\*\*/g, "")
+    .replace(/(^|\n)\s*\d+\s*(?=\n|$)/g, "$1")
+    .trim();
   if (cleanSnippet.length < 5) return false;
 
   const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
@@ -2082,10 +2129,13 @@ function openKnowledgeGraphModal(docName, sectionId, activeNodeKey = "DOC") {
     graphModalSvg.innerHTML = svg;
 
     graphModalSvg.querySelectorAll(".modal-graph-node").forEach((nodeEl) => {
+      const key = nodeEl.getAttribute("data-key");
       nodeEl.addEventListener("click", () => {
-        const key = nodeEl.getAttribute("data-key");
         selectGraphNodeDetails(key, docName, sectionId);
         openKnowledgeGraphModal(docName, sectionId, key);
+      });
+      nodeEl.addEventListener("mouseenter", () => {
+        selectGraphNodeDetails(key, docName, sectionId);
       });
     });
   }
@@ -2147,29 +2197,128 @@ function closeDocumentInspector() {
   }
 }
 
-// Fullscreen Original PDF Viewer Functions
-function openFullscreenPdfViewer(filename, page = 1) {
+function escapeRegex(string) {
+  return (string || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+let currentTextFontSize = 15;
+
+// Universal High-Resolution Full Document Viewer (PDF, TXT, MD, Legal Corpora)
+async function openUniversalDocumentViewer(filename, page = 1, targetSnippet = "") {
   if (!modalPdfViewer) return;
   activePdfFilename = filename;
   activePdfPage = page || 1;
   currentPdfZoom = 100;
+  currentTextFontSize = 15;
+
+  const isPdf = filename.toLowerCase().endsWith(".pdf");
+  const isLegal = filename.toLowerCase().includes("ptk") || filename.toLowerCase().includes("btk");
 
   if (pdfModalTitle) pdfModalTitle.textContent = filename;
-  if (pdfModalPageInfo) pdfModalPageInfo.textContent = `Page ${activePdfPage} · Original Source PDF`;
-  if (pdfZoomLevel) pdfZoomLevel.textContent = "100%";
+  if (pdfModalPageInfo) {
+    pdfModalPageInfo.textContent = isPdf
+      ? `Page ${activePdfPage} · Original Source PDF`
+      : (isLegal ? "Official Legal Statute Corpus · Full Reader" : "Full Document Reader");
+  }
+
+  const univDocIcon = document.getElementById("univDocIcon");
+  if (univDocIcon) {
+    univDocIcon.textContent = isPdf ? "📕" : (isLegal ? "⚖️" : (filename.toLowerCase().endsWith(".md") ? "📝" : "📄"));
+  }
 
   const profileParam = currentProfileId ? `?profile_id=${encodeURIComponent(currentProfileId)}` : "";
-  const pdfUrl = `/documents/${encodeURIComponent(filename)}/download${profileParam}#page=${activePdfPage}&zoom=100&toolbar=1`;
-
-  if (pdfModalFrame) {
-    pdfModalFrame.src = pdfUrl;
-  }
+  const downloadUrl = `/documents/${encodeURIComponent(filename)}/download${profileParam}`;
   if (pdfModalDownloadBtn) {
-    pdfModalDownloadBtn.href = `/documents/${encodeURIComponent(filename)}/download${profileParam}`;
+    pdfModalDownloadBtn.href = downloadUrl;
     pdfModalDownloadBtn.download = filename;
   }
 
+  const pdfZoomGroup = document.getElementById("univPdfZoomGroup");
+  const textZoomGroup = document.getElementById("univTextZoomGroup");
+  const textContainer = document.getElementById("univTextContainer");
+  const textLoading = document.getElementById("univTextLoading");
+  const textContent = document.getElementById("univTextContent");
+
+  if (isPdf) {
+    if (pdfZoomGroup) pdfZoomGroup.style.display = "flex";
+    if (textZoomGroup) textZoomGroup.style.display = "none";
+    if (textContainer) textContainer.style.display = "none";
+    if (pdfModalFrame) {
+      pdfModalFrame.style.display = "block";
+      pdfModalFrame.src = `${downloadUrl}#page=${activePdfPage}&zoom=100&toolbar=1`;
+    }
+    if (pdfZoomLevel) pdfZoomLevel.textContent = "100%";
+  } else {
+    if (pdfZoomGroup) pdfZoomGroup.style.display = "none";
+    if (textZoomGroup) textZoomGroup.style.display = "flex";
+    if (pdfModalFrame) {
+      pdfModalFrame.style.display = "none";
+      pdfModalFrame.src = "about:blank";
+    }
+    if (textContainer) {
+      textContainer.style.display = "block";
+      textContainer.style.fontSize = `${currentTextFontSize}px`;
+    }
+    if (textLoading) textLoading.style.display = "flex";
+    if (textContent) textContent.innerHTML = "";
+
+    try {
+      let fullText = "";
+      const ctxRes = await fetch(`/documents/${encodeURIComponent(filename)}/context?${profileParam ? profileParam.slice(1) : ""}`);
+      if (ctxRes.ok) {
+        const ctxData = await ctxRes.json();
+        fullText = ctxData.full_text || "";
+      }
+      if (!fullText) {
+        const dlRes = await fetch(downloadUrl);
+        if (dlRes.ok) {
+          fullText = await dlRes.text();
+        }
+      }
+
+      if (textLoading) textLoading.style.display = "none";
+
+      if (textContent) {
+        if (!fullText) {
+          textContent.innerHTML = `<div class="text-muted" style="text-align: center; padding: 40px 0;">Could not load document text for ${escapeHtml(filename)}.</div>`;
+        } else {
+          const sanitized = sanitizeDocumentText(fullText);
+          let renderedHtml = renderMarkdown(sanitized);
+
+          if (targetSnippet) {
+            const cleanTarget = sanitizeDocumentText(targetSnippet).slice(0, 70).trim();
+            if (cleanTarget) {
+              const regex = new RegExp("(" + escapeRegex(cleanTarget) + ")", "i");
+              if (regex.test(renderedHtml)) {
+                renderedHtml = renderedHtml.replace(regex, '<mark class="full-doc-highlight" id="fullDocActiveHighlight">$1</mark>');
+              }
+            }
+          }
+
+          textContent.innerHTML = renderedHtml;
+
+          setTimeout(() => {
+            const hl = document.getElementById("fullDocActiveHighlight");
+            if (hl) {
+              hl.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 120);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load full document text:", err);
+      if (textLoading) textLoading.style.display = "none";
+      if (textContent) {
+        textContent.innerHTML = `<div class="text-muted" style="text-align: center; padding: 40px 0;">Failed to load document text.</div>`;
+      }
+    }
+  }
+
   modalPdfViewer.classList.add("show");
+}
+
+function openFullscreenPdfViewer(filename, page = 1) {
+  openUniversalDocumentViewer(filename, page);
 }
 
 function closeFullscreenPdfViewer() {
@@ -2206,9 +2355,29 @@ if (pdfZoomReset) {
   pdfZoomReset.addEventListener("click", () => updatePdfZoom(0));
 }
 
+const univFontDecrease = document.getElementById("univFontDecrease");
+const univFontIncrease = document.getElementById("univFontIncrease");
+if (univFontDecrease) {
+  univFontDecrease.addEventListener("click", () => {
+    currentTextFontSize = Math.max(12, currentTextFontSize - 2);
+    const textContainer = document.getElementById("univTextContainer");
+    if (textContainer) textContainer.style.fontSize = `${currentTextFontSize}px`;
+  });
+}
+if (univFontIncrease) {
+  univFontIncrease.addEventListener("click", () => {
+    currentTextFontSize = Math.min(26, currentTextFontSize + 2);
+    const textContainer = document.getElementById("univTextContainer");
+    if (textContainer) textContainer.style.fontSize = `${currentTextFontSize}px`;
+  });
+}
+
 function renderExtractedContextCard(opts) {
   if (!docViewerContent) return;
   docViewerContent.innerHTML = "";
+
+  const cleanPre = opts.precedingContext ? sanitizeDocumentText(opts.precedingContext) : "";
+  const cleanPost = opts.succeedingContext ? sanitizeDocumentText(opts.succeedingContext) : "";
 
   const card = document.createElement("div");
   card.className = "extracted-context-card";
@@ -2219,24 +2388,19 @@ function renderExtractedContextCard(opts) {
         ${opts.page != null ? `<span class="context-page-badge">Page ${opts.page}</span>` : ""}
         ${opts.targetSection ? `<span class="context-section-badge">${escapeHtml(opts.targetSection)}</span>` : ""}
       </div>
-      ${opts.isPdf ? `
-        <button class="extracted-view-pdf-link" id="extractedViewPdfBtn" type="button">
-          <span>🔍 View Original PDF in Fullscreen</span>
-        </button>
-      ` : ""}
     </div>
     <div class="context-container">
-      ${opts.precedingContext ? `
+      ${cleanPre ? `
         <div class="context-preceding">
           <div class="context-preceding-label">Preceding Context</div>
-          <div>${escapeHtml(opts.precedingContext)}</div>
+          <div class="context-preceding-body">${renderMarkdown(cleanPre)}</div>
         </div>
       ` : ""}
       <div class="extracted-chunk-body" id="extractedChunkText"></div>
-      ${opts.succeedingContext ? `
+      ${cleanPost ? `
         <div class="context-succeeding">
           <div class="context-succeeding-label">Succeeding Context</div>
-          <div>${escapeHtml(opts.succeedingContext)}</div>
+          <div class="context-succeeding-body">${renderMarkdown(cleanPost)}</div>
         </div>
       ` : ""}
     </div>
@@ -2248,11 +2412,6 @@ function renderExtractedContextCard(opts) {
   if (chunkBody) {
     chunkBody.innerHTML = renderMarkdown(opts.chunkText);
     highlightSnippetInElement(chunkBody, opts.highlightText, opts.targetSection);
-  }
-
-  const viewPdfLink = card.querySelector("#extractedViewPdfBtn");
-  if (viewPdfLink) {
-    viewPdfLink.addEventListener("click", () => openFullscreenPdfViewer(opts.effectiveFile, opts.page || 1));
   }
 }
 
@@ -2296,13 +2455,10 @@ window.openDocumentViewer = async function (filename, page = null, snippet = nul
     docViewerIcon.textContent = isPdf ? "📕" : (effectiveFile.toLowerCase().endsWith(".md") ? "📝" : "📄");
   }
 
-  if (btnViewPdf) {
-    if (isPdf) {
-      btnViewPdf.style.display = "inline-flex";
-      btnViewPdf.onclick = () => openFullscreenPdfViewer(effectiveFile, page || 1);
-    } else {
-      btnViewPdf.style.display = "none";
-    }
+  const btnViewFullDoc = document.getElementById("btn-view-full-doc") || btnViewPdf;
+  if (btnViewFullDoc) {
+    btnViewFullDoc.style.display = "inline-flex";
+    btnViewFullDoc.onclick = () => openUniversalDocumentViewer(effectiveFile, page || 1, snippet);
   }
 
   renderDocumentGraph(filename, sectionId);
@@ -2348,6 +2504,9 @@ window.openDocumentViewer = async function (filename, page = null, snippet = nul
       const highlightSentence = data.highlight || targetSnippet || "";
       const preContext = data.preceding_context || "";
       const postContext = data.succeeding_context || "";
+      if (btnViewFullDoc) {
+        btnViewFullDoc.onclick = () => openUniversalDocumentViewer(effectiveFile, data.page || page || 1, highlightSentence || targetSnippet || snippet);
+      }
 
       renderExtractedContextCard({
         isPdf,

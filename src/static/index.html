@@ -161,9 +161,10 @@
               </div>
             </div>
             <div class="doc-inspector-actions">
-              <button class="inspector-action-btn view-pdf-btn" id="btn-view-pdf" title="View Original PDF in Fullscreen" style="display: none;">
-                <span class="btn-icon">📄</span> <span class="btn-label">View Original PDF</span>
+              <button class="inspector-action-btn view-full-doc-btn" id="btn-view-full-doc" title="View Full Document in Fullscreen">
+                <span class="btn-icon">📖</span> <span class="btn-label">Full Document</span>
               </button>
+              <button id="btn-view-pdf" style="display: none;" aria-hidden="true"></button>
               <button class="inspector-action-btn active" id="btn-toggle-graph" title="Toggle Knowledge Graph Widget">🕸️</button>
               <a id="docViewerDownloadBtn" class="inspector-action-btn" title="Download Document" download target="_blank">📥</a>
               <button class="inspector-action-btn close-btn" id="docInspectorClose" title="Close Inspector">&times;</button>
@@ -213,30 +214,41 @@
     </main>
   </div>
 
-  <!-- High-Resolution Fullscreen PDF Viewer Modal -->
-  <div class="modal-overlay pdf-viewer-modal-overlay" id="modal-pdf-viewer">
-    <div class="modal-card pdf-viewer-card">
-      <div class="modal-header pdf-viewer-header">
-        <div class="pdf-header-meta">
-          <span class="pdf-file-icon">📕</span>
-          <div class="pdf-header-titles">
-            <h3 id="pdfModalTitle" class="pdf-modal-title">Document.pdf</h3>
-            <span id="pdfModalPageInfo" class="pdf-page-info">Original Source PDF</span>
+  <!-- Universal High-Resolution Full Document Viewer Modal (PDF, TXT, MD, Legal Corpora) -->
+  <div class="modal-overlay pdf-viewer-modal-overlay universal-doc-modal-overlay" id="modal-pdf-viewer">
+    <div class="modal-card pdf-viewer-card universal-doc-card">
+      <div class="modal-header pdf-viewer-header universal-doc-header">
+        <div class="pdf-header-meta doc-header-meta">
+          <span class="pdf-file-icon doc-file-icon" id="univDocIcon">📄</span>
+          <div class="pdf-header-titles doc-header-titles">
+            <h3 id="pdfModalTitle" class="pdf-modal-title univ-doc-title">Document</h3>
+            <span id="pdfModalPageInfo" class="pdf-page-info univ-doc-page-info">Full Document Reader</span>
           </div>
         </div>
-        <div class="pdf-header-controls">
-          <div class="pdf-zoom-group">
+        <div class="pdf-header-controls doc-header-controls">
+          <div class="pdf-zoom-group" id="univPdfZoomGroup">
             <button class="pdf-ctrl-btn" id="pdfZoomOut" title="Zoom Out (–)">−</button>
             <span class="pdf-zoom-level" id="pdfZoomLevel">100%</span>
             <button class="pdf-ctrl-btn" id="pdfZoomIn" title="Zoom In (+)">+</button>
             <button class="pdf-ctrl-btn" id="pdfZoomReset" title="Reset Zoom to 100%">100%</button>
           </div>
-          <a class="pdf-ctrl-btn" id="pdfModalDownloadBtn" title="Download Original PDF" download target="_blank">📥</a>
-          <button class="modal-close pdf-modal-close-btn" id="pdfModalClose" title="Close PDF Viewer">&times;</button>
+          <div class="text-zoom-group" id="univTextZoomGroup" style="display: none;">
+            <button class="pdf-ctrl-btn" id="univFontDecrease" title="Smaller Font">A−</button>
+            <button class="pdf-ctrl-btn" id="univFontIncrease" title="Larger Font">A+</button>
+          </div>
+          <a class="pdf-ctrl-btn" id="pdfModalDownloadBtn" title="Download Document" download target="_blank">📥</a>
+          <button class="modal-close pdf-modal-close-btn universal-doc-close-btn" id="pdfModalClose" title="Close Document Viewer">&times;</button>
         </div>
       </div>
-      <div class="pdf-viewer-body" id="pdfViewerBody">
-        <iframe id="pdfModalFrame" class="pdf-modal-frame" src="about:blank" title="PDF Full Preview"></iframe>
+      <div class="pdf-viewer-body universal-doc-body" id="pdfViewerBody">
+        <iframe id="pdfModalFrame" class="pdf-modal-frame univ-pdf-frame" src="about:blank" title="PDF Full Preview"></iframe>
+        <div id="univTextContainer" class="univ-text-container" style="display: none;">
+          <div class="univ-text-loading" id="univTextLoading">
+            <div class="spinner"></div>
+            <span>Loading full document text…</span>
+          </div>
+          <div class="univ-text-content" id="univTextContent"></div>
+        </div>
       </div>
     </div>
   </div>
