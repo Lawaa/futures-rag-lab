@@ -21,8 +21,9 @@ from langchain_core.vectorstores import VectorStoreRetriever
 
 from .conversation_store import ConversationStore
 from .graph import STAGE_LABELS, RetrievalGraph
+from .guardrails import apply_guardrails_to_inputs, apply_guardrails_to_outputs
 from .models import Answer, RetrievalResult
-from .profiles import ProfileRegistry, load_profiles
+from .profiles import Profile, ProfileRegistry, load_profiles
 from .prompts import (
     get_groundedness_prompt,
     get_qa_prompt,
@@ -31,6 +32,7 @@ from .prompts import (
     outside_knowledge_note,
 )
 from .settings import Settings
+from .vector_store import build_retriever
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -59,23 +61,51 @@ class RagService:
         self._store = store
         self._histories: dict[str, InMemoryChatMessageHistory] = {}
         self._profiles: ProfileRegistry = load_profiles(settings)
+        self._retrievers: dict[str, VectorStoreRetriever] = {"default": retriever}
         self._retrieval_graph = RetrievalGraph(
-            llm, retriever, settings, self._profiles, checkpointer
+            llm,
+            retriever,
+            settings,
+            self._profiles,
+            checkpointer,
+            retriever_factory=self.get_retriever,
         )
         self._groundedness_check = settings.enable_groundedness_check
         self._groundedness_chain = (
             get_groundedness_prompt() | llm | StrOutputParser()
         )
-        # Answer chains are built per profile (each has its own system prompt)
+        # Answer chains are built per profile (each has its own system prompt and guardrails)
         # and cached, since routing can select a different profile per turn.
         self._answer_chains: dict[str, object] = {}
+
+    @property
+    def profiles(self) -> ProfileRegistry:
+        """Return the current profile registry."""
+        return self._profiles
+
+    def get_retriever(self, profile_id: str | None = None) -> VectorStoreRetriever:
+        """Fetch or create the cached retriever for a specific profile/tenant."""
+        pid = profile_id or "default"
+        if pid not in self._retrievers:
+            self._retrievers[pid] = build_retriever(self._settings, profile_id=pid)
+        return self._retrievers[pid]
+
+    def update_profile(self, profile: Profile) -> None:
+        """Update or register a profile, persist to disk, and invalidate cached chains."""
+        self._profiles = self._profiles.add_or_update(profile)
+        self._profiles.save_to_disk(self._settings.profiles_path)
+        self._answer_chains.pop(profile.id, None)
 
     def _answer_chain(self, profile_id: str | None):
         """Return the cached answer chain for a profile (built on first use)."""
         profile = self._profiles.get(profile_id)
         chain = self._answer_chains.get(profile.id)
         if chain is None:
-            prompt = get_qa_prompt(self._settings.language, profile.system_prompt)
+            prompt = get_qa_prompt(
+                self._settings.language,
+                profile.system_prompt,
+                guardrails=profile.guardrails,
+            )
             chain = prompt | self._llm | StrOutputParser()
             self._answer_chains[profile.id] = chain
         return chain
@@ -137,7 +167,10 @@ class RagService:
 
     # -- retrieval ------------------------------------------------------------
     def retrieve(
-        self, question: str, session_id: str = DEFAULT_SESSION_ID
+        self,
+        question: str,
+        session_id: str = DEFAULT_SESSION_ID,
+        profile_id: str | None = None,
     ) -> RetrievalResult:
         """Run the LangGraph retrieval pipeline for a question.
 
@@ -146,12 +179,14 @@ class RagService:
         until relevant results are found or the retry budget is exhausted.
         """
         history = self._history(session_id)
-        state = self._retrieval_graph.run(question, history.messages, session_id)
+        state = self._retrieval_graph.run(
+            question, history.messages, session_id, profile_id=profile_id
+        )
         return RetrievalResult(
             standalone_question=state.get("search_query", question),
             documents=state.get("documents", []),
             retry_count=state.get("retry_count", 0),
-            profile_id=state.get("profile_id") or self._profiles.active_id,
+            profile_id=state.get("profile_id") or profile_id or self._profiles.active_id,
         )
 
     # -- generation -----------------------------------------------------------
@@ -203,14 +238,21 @@ class RagService:
         return text, [], False
 
     def answer(
-        self, question: str, session_id: str = DEFAULT_SESSION_ID
+        self,
+        question: str,
+        session_id: str = DEFAULT_SESSION_ID,
+        profile_id: str | None = None,
     ) -> Answer:
-        """Generate a complete answer with its supporting sources."""
-        retrieval = self.retrieve(question, session_id)
+        """Generate a complete answer with its supporting sources, applying domain guardrails."""
+        profile = self._profiles.get(profile_id)
+        clean_q = apply_guardrails_to_inputs(question, profile.guardrails)
+
+        retrieval = self.retrieve(clean_q, session_id, profile_id=profile.id)
         raw = self._answer_chain(retrieval.profile_id).invoke(
-            self._answer_inputs(question, retrieval, session_id)
+            self._answer_inputs(clean_q, retrieval, session_id)
         )
-        text, sources, grounded = self._finalize(retrieval, raw)
+        sanitized_raw = apply_guardrails_to_outputs(raw, profile.guardrails)
+        text, sources, grounded = self._finalize(retrieval, sanitized_raw)
         self._remember(session_id, question, text)
         return Answer(text=text, sources=sources, grounded=grounded)
 
@@ -225,16 +267,24 @@ class RagService:
         Accepting the :class:`RetrievalResult` lets callers display sources
         before generation begins without retrieving twice.
         """
+        profile = self._profiles.get(retrieval.profile_id)
+        clean_q = apply_guardrails_to_inputs(question, profile.guardrails)
+
         chunks: list[str] = []
         for token in self._answer_chain(retrieval.profile_id).stream(
-            self._answer_inputs(question, retrieval, session_id)
+            self._answer_inputs(clean_q, retrieval, session_id)
         ):
             chunks.append(token)
             yield token
-        self._remember(session_id, question, "".join(chunks))
+        raw = "".join(chunks)
+        sanitized = apply_guardrails_to_outputs(raw, profile.guardrails)
+        self._remember(session_id, question, sanitized)
 
     def stream_events(
-        self, question: str, session_id: str = DEFAULT_SESSION_ID
+        self,
+        question: str,
+        session_id: str = DEFAULT_SESSION_ID,
+        profile_id: str | None = None,
     ) -> Iterator[dict]:
         """Stream the full turn as structured events for a live progress UI.
 
@@ -242,10 +292,13 @@ class RagService:
         events while the answer is generated, and a terminal ``done`` event
         carrying the sources, groundedness verdict and any hallucination note.
         """
+        profile = self._profiles.get(profile_id)
+        clean_q = apply_guardrails_to_inputs(question, profile.guardrails)
+
         history = self._history(session_id)
         final_state: dict = {}
         for node_name, node_state in self._retrieval_graph.stream(
-            question, history.messages, session_id
+            clean_q, history.messages, session_id, profile_id=profile.id
         ):
             final_state.update(node_state)
             stage = STAGE_LABELS.get(node_name)
@@ -253,28 +306,29 @@ class RagService:
                 yield {"type": "status", "stage": stage}
 
         retrieval = RetrievalResult(
-            standalone_question=final_state.get("search_query", question),
+            standalone_question=final_state.get("search_query", clean_q),
             documents=final_state.get("documents", []),
             retry_count=final_state.get("retry_count", 0),
-            profile_id=final_state.get("profile_id") or self._profiles.active_id,
+            profile_id=final_state.get("profile_id") or profile.id,
         )
 
         yield {"type": "status", "stage": "answering"}
         chunks: list[str] = []
         for token in self._answer_chain(retrieval.profile_id).stream(
-            self._answer_inputs(question, retrieval, session_id)
+            self._answer_inputs(clean_q, retrieval, session_id)
         ):
             chunks.append(token)
             yield {"type": "token", "text": token}
         raw = "".join(chunks)
 
-        text, sources, grounded = self._finalize(retrieval, raw)
+        sanitized_raw = apply_guardrails_to_outputs(raw, profile.guardrails)
+        text, sources, grounded = self._finalize(retrieval, sanitized_raw)
         # When _finalize prepends an "outside knowledge" note to a silent
         # hallucination, surface just that note so the UI can show it above the
         # already-streamed answer body.
         note = None
-        if not grounded and text.endswith(raw) and len(text) > len(raw):
-            note = text[: len(text) - len(raw)].strip()
+        if not grounded and text.endswith(sanitized_raw) and len(text) > len(sanitized_raw):
+            note = text[: len(text) - len(sanitized_raw)].strip()
 
         self._remember(session_id, question, text)
         yield {

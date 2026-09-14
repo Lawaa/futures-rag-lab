@@ -15,7 +15,10 @@ profile, so one deployment can serve several business domains at once.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from .logging_config import get_logger
 from .settings import Settings
@@ -25,27 +28,27 @@ logger = get_logger(__name__)
 DEFAULT_PROFILE_ID = "default"
 
 
-@dataclass(frozen=True)
-class Profile:
-    """A named business/tenant profile.
+class Profile(BaseModel):
+    """A named business/tenant profile with domain persona and guardrails.
 
-    ``system_prompt`` overrides the default assistant persona used during answer
-    generation; ``description`` is shown to the router so it can pick the right
-    profile for an incoming question.
+    ``system_prompt`` overrides the default assistant persona during answer
+    generation; ``description`` is shown to the router; ``guardrails`` configure
+    domain-specific rules (e.g. enforce_citations, anonymize_phi).
     """
 
     id: str
     name: str
     description: str = ""
     system_prompt: str | None = None
+    guardrails: dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass(frozen=True)
 class ProfileRegistry:
-    """An immutable collection of profiles with an active selection."""
+    """A collection of tenant/domain profiles with an active selection."""
 
-    profiles: tuple[Profile, ...]
-    active_id: str
+    def __init__(self, profiles: tuple[Profile, ...] | list[Profile], active_id: str) -> None:
+        self.profiles: tuple[Profile, ...] = tuple(profiles)
+        self.active_id: str = active_id
 
     @property
     def active(self) -> Profile:
@@ -57,7 +60,7 @@ class ProfileRegistry:
         for profile in self.profiles:
             if profile.id == profile_id:
                 return profile
-        return self.profiles[0]
+        return self.profiles[0] if self.profiles else _builtin_default()
 
     @property
     def routable(self) -> bool:
@@ -71,13 +74,41 @@ class ProfileRegistry:
             for profile in self.profiles
         )
 
+    def list_profiles(self) -> list[Profile]:
+        """Return all registered profiles as a list."""
+        return list(self.profiles)
+
+    def add_or_update(self, new_profile: Profile) -> ProfileRegistry:
+        """Return a new ProfileRegistry with the given profile added or updated."""
+        updated: list[Profile] = []
+        found = False
+        for p in self.profiles:
+            if p.id == new_profile.id:
+                updated.append(new_profile)
+                found = True
+            else:
+                updated.append(p)
+        if not found:
+            updated.append(new_profile)
+
+        active = self.active_id if any(p.id == self.active_id for p in updated) else updated[0].id
+        return ProfileRegistry(profiles=tuple(updated), active_id=active)
+
+    def save_to_disk(self, path: Path) -> None:
+        """Persist registered profiles to a JSON file."""
+        data = [p.model_dump() for p in self.profiles]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
 
 def _builtin_default() -> Profile:
     """The single profile used when no profiles file is configured."""
     return Profile(
         id=DEFAULT_PROFILE_ID,
-        name="Knowledge Base Assistant",
+        name="General Futures Assistant",
         description="General knowledge base built from the loaded documents.",
+        system_prompt="You are an expert Futures Trading Assistant.",
+        guardrails={"enforce_citations": False, "anonymize_phi": False},
     )
 
 
@@ -96,6 +127,7 @@ def _parse_profiles(raw: object) -> list[Profile]:
                 name=str(entry.get("name", profile_id)),
                 description=str(entry.get("description", "")),
                 system_prompt=entry.get("system_prompt"),
+                guardrails=entry.get("guardrails") or {},
             )
         )
     return profiles

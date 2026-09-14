@@ -117,11 +117,31 @@ def is_affirmative(text: str) -> bool:
     return any(token in lowered for token in _AFFIRMATIVE_TOKENS)
 
 
-def _qa_system_prompt(language: str, persona: str) -> str:
+_CITATION_ENFORCEMENT_RULE: dict[str, str] = {
+    "en": (
+        "\n\nMandatory Citation Rules:\n"
+        "- Every substantive assertion, finding, or conclusion MUST be explicitly cited with its exact supporting document reference (e.g. '[Source: document, Page: X]').\n"
+        "- Do NOT make uncited claims when deriving answers from context."
+    ),
+    "hu": (
+        "\n\nKötelező hivatkozási szabályok:\n"
+        "- Minden érdemi állítást vagy következtetést kifejezetten a forrásdokumentumra hivatkozva kell alátámasztani (pl. '[Forrás: dokumentum, Oldal: X]').\n"
+        "- Ne tegyen forrás nélküli kijelentéseket a kontextusból származó válaszoknál."
+    ),
+}
+
+
+def _qa_system_prompt(
+    language: str, persona: str, guardrails: dict[str, Any] | None = None
+) -> str:
     template = _QA_TEMPLATES.get(language) or _QA_TEMPLATES["en"]
-    return template.replace("__PERSONA__", persona).replace(
+    prompt = template.replace("__PERSONA__", persona).replace(
         "__NOTE__", outside_knowledge_note(language)
     )
+    if guardrails and guardrails.get("enforce_citations", False):
+        rule = _CITATION_ENFORCEMENT_RULE.get(language) or _CITATION_ENFORCEMENT_RULE["en"]
+        prompt = f"{prompt}\n{rule}"
+    return prompt
 
 
 
@@ -138,18 +158,21 @@ def get_contextualize_prompt(language: str = "en") -> ChatPromptTemplate:
 
 
 def get_qa_prompt(
-    language: str = "en", system_prompt: str | None = None
+    language: str = "en",
+    system_prompt: str | None = None,
+    guardrails: dict[str, Any] | None = None,
 ) -> ChatPromptTemplate:
-    """Build the answer-generation prompt for a language and optional persona.
+    """Build the answer-generation prompt for a language, optional persona, and domain guardrails.
 
     ``system_prompt`` (from the active :class:`~src.profiles.Profile`) replaces
     the default persona; the shared grounding rules and ``{context}`` slot are
     always appended so groundedness handling is identical for every profile.
+    ``guardrails`` inject domain compliance constraints (e.g. enforce_citations).
     """
     persona = system_prompt or DEFAULT_PERSONAS.get(language) or DEFAULT_PERSONAS["en"]
     return ChatPromptTemplate.from_messages(
         [
-            ("system", _qa_system_prompt(language, persona)),
+            ("system", _qa_system_prompt(language, persona, guardrails=guardrails)),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{question}"),
         ]

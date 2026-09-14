@@ -24,6 +24,15 @@
           <div class="title"><img class="brand-icon large" src="/assets/icon.png" alt="" /> <span data-i18n="headerTitle">Futures Trading Assistant</span></div>
           <div class="subtitle" data-i18n="headerSubtitle">Ask about margins, contracts, settlement, risk and more</div>
         </div>
+        <div class="header-controls">
+          <div class="profile-badge">
+            <span class="profile-label">Domain:</span>
+            <select id="profile-select" class="profile-dropdown" title="Select active domain profile"></select>
+          </div>
+          <button id="btn-profile-config" class="ctrl-btn" title="Domain Persona & Guardrails">⚙️ Domain</button>
+          <button id="btn-kb-manager" class="ctrl-btn" title="Knowledge Base Documents">📁 Docs</button>
+          <button id="btn-benchmarks" class="ctrl-btn" title="Embedding Model Benchmarks">📊 Benchmarks</button>
+        </div>
       </header>
 
       <div class="messages" id="messages">
@@ -41,6 +50,96 @@
         </div>
         <div class="hint" data-i18n="hint">Press Enter to send · Shift+Enter for a new line</div>
       </footer>
+    </div>
+  </div>
+
+  <!-- Profile Configuration Modal -->
+  <div class="modal-overlay" id="modal-profile">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙️ Tenant &amp; Domain Profile</h3>
+        <button class="modal-close" id="prof-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="prof-id">Profile ID</label>
+          <input type="text" id="prof-id" placeholder="e.g. legal, healthcare" />
+        </div>
+        <div class="form-group">
+          <label for="prof-name">Display Name</label>
+          <input type="text" id="prof-name" placeholder="e.g. Legal & Compliance Advisor" />
+        </div>
+        <div class="form-group">
+          <label for="prof-desc">Description (Router summary)</label>
+          <input type="text" id="prof-desc" placeholder="Summary of domain scope..." />
+        </div>
+        <div class="form-group">
+          <label for="prof-prompt">System Prompt (Persona &amp; Instructions)</label>
+          <textarea id="prof-prompt" rows="4" placeholder="You are an expert advisor in..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Domain Guardrails</label>
+          <div class="checkbox-row">
+            <input type="checkbox" id="prof-guard-citations" />
+            <label for="prof-guard-citations"><strong>Enforce Citations:</strong> Require explicit source document/page references for assertions</label>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="prof-guard-phi" />
+            <label for="prof-guard-phi"><strong>Anonymize PII/PHI:</strong> Automatically redact SSN, MRN, phone, email, and patient identifiers</label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="prof-create-new" class="btn-secondary">+ New Profile</button>
+          <button id="prof-save" class="btn-primary">Save Profile</button>
+        </div>
+        <div id="prof-status" class="status-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Knowledge Base Documents Modal -->
+  <div class="modal-overlay" id="modal-kb">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3>📁 Knowledge Base Manager (<span id="kb-active-profile">Default</span>)</h3>
+        <button class="modal-close" id="kb-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="kb-upload-box">
+          <input type="file" id="kb-file-input" accept=".pdf,.txt,.md" />
+          <button id="kb-upload-btn" class="btn-primary">Upload &amp; Index</button>
+          <span id="kb-upload-status" class="status-msg"></span>
+        </div>
+        <div class="kb-table-container">
+          <table class="kb-table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="kb-docs-list">
+              <tr><td colspan="4" class="text-muted">Loading documents...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Embedding Benchmarks Modal -->
+  <div class="modal-overlay" id="modal-benchmarks">
+    <div class="modal-card extra-wide">
+      <div class="modal-header">
+        <h3>📊 Embedding Model Benchmark Analytics</h3>
+        <button class="modal-close" id="bm-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="bm-summary" id="bm-summary-chips"></div>
+        <div class="bm-report" id="bm-report-content">Loading report...</div>
+      </div>
     </div>
   </div>
 

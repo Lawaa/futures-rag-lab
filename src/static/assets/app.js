@@ -477,7 +477,11 @@ async function send(question) {
     const res = await fetch("/chat/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, session_id: currentId }),
+      body: JSON.stringify({
+        question: q,
+        session_id: currentId,
+        profile_id: currentProfileId,
+      }),
     });
 
     if (!res.ok || !res.body) {
@@ -606,6 +610,318 @@ setupKeyEl.addEventListener("keydown", (e) => {
   }
 });
 
+// --- Multi-Tenant & Domain Profile State & Controls ----------------------
+let profiles = [];
+let currentProfileId = "default";
+
+const profileSelectEl = document.getElementById("profile-select");
+const btnProfileConfig = document.getElementById("btn-profile-config");
+const btnKbManager = document.getElementById("btn-kb-manager");
+const btnBenchmarks = document.getElementById("btn-benchmarks");
+
+// Modals
+const modalProfile = document.getElementById("modal-profile");
+const modalKb = document.getElementById("modal-kb");
+const modalBenchmarks = document.getElementById("modal-benchmarks");
+
+// Profile modal fields
+const profClose = document.getElementById("prof-close");
+const profIdEl = document.getElementById("prof-id");
+const profNameEl = document.getElementById("prof-name");
+const profDescEl = document.getElementById("prof-desc");
+const profPromptEl = document.getElementById("prof-prompt");
+const profGuardCitationsEl = document.getElementById("prof-guard-citations");
+const profGuardPhiEl = document.getElementById("prof-guard-phi");
+const profCreateNewBtn = document.getElementById("prof-create-new");
+const profSaveBtn = document.getElementById("prof-save");
+const profStatusEl = document.getElementById("prof-status");
+
+// KB modal fields
+const kbClose = document.getElementById("kb-close");
+const kbActiveProfileEl = document.getElementById("kb-active-profile");
+const kbFileInput = document.getElementById("kb-file-input");
+const kbUploadBtn = document.getElementById("kb-upload-btn");
+const kbUploadStatus = document.getElementById("kb-upload-status");
+const kbDocsList = document.getElementById("kb-docs-list");
+
+// Benchmarks modal fields
+const bmClose = document.getElementById("bm-close");
+const bmSummaryChips = document.getElementById("bm-summary-chips");
+const bmReportContent = document.getElementById("bm-report-content");
+
+async function loadProfiles() {
+  try {
+    const res = await fetch("/profiles");
+    if (res.ok) {
+      const data = await res.json();
+      profiles = data.profiles || [];
+      profileSelectEl.innerHTML = "";
+      for (const p of profiles) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name || p.id;
+        profileSelectEl.appendChild(opt);
+      }
+      if (profiles.some((p) => p.id === currentProfileId)) {
+        profileSelectEl.value = currentProfileId;
+      } else if (profiles.length > 0) {
+        currentProfileId = profiles[0].id;
+        profileSelectEl.value = currentProfileId;
+      }
+      updateActiveProfileLabel();
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function updateActiveProfileLabel() {
+  const p = profiles.find((x) => x.id === currentProfileId);
+  if (kbActiveProfileEl) {
+    kbActiveProfileEl.textContent = p ? p.name : currentProfileId;
+  }
+}
+
+profileSelectEl.addEventListener("change", (e) => {
+  currentProfileId = e.target.value;
+  updateActiveProfileLabel();
+});
+
+// Profile Modal Handlers
+btnProfileConfig.addEventListener("click", () => {
+  const p = profiles.find((x) => x.id === currentProfileId);
+  if (p) {
+    profIdEl.value = p.id;
+    profIdEl.disabled = true;
+    profNameEl.value = p.name || "";
+    profDescEl.value = p.description || "";
+    profPromptEl.value = p.system_prompt || "";
+    const guards = p.guardrails || {};
+    profGuardCitationsEl.checked = Boolean(guards.enforce_citations);
+    profGuardPhiEl.checked = Boolean(guards.anonymize_phi);
+  } else {
+    resetProfileForm();
+  }
+  profStatusEl.textContent = "";
+  profStatusEl.className = "status-msg";
+  modalProfile.classList.add("show");
+});
+
+function resetProfileForm() {
+  profIdEl.value = "";
+  profIdEl.disabled = false;
+  profNameEl.value = "";
+  profDescEl.value = "";
+  profPromptEl.value = "";
+  profGuardCitationsEl.checked = false;
+  profGuardPhiEl.checked = false;
+}
+
+profCreateNewBtn.addEventListener("click", () => {
+  resetProfileForm();
+  profIdEl.focus();
+});
+
+profClose.addEventListener("click", () => modalProfile.classList.remove("show"));
+
+profSaveBtn.addEventListener("click", async () => {
+  const id = profIdEl.value.trim();
+  const name = profNameEl.value.trim();
+  if (!id || !name) {
+    profStatusEl.textContent = "Profile ID and Display Name are required.";
+    profStatusEl.className = "status-msg error";
+    return;
+  }
+  const payload = {
+    id,
+    name,
+    description: profDescEl.value.trim(),
+    system_prompt: profPromptEl.value.trim(),
+    guardrails: {
+      enforce_citations: profGuardCitationsEl.checked,
+      anonymize_phi: profGuardPhiEl.checked,
+    },
+  };
+  profStatusEl.textContent = "Saving profile…";
+  profStatusEl.className = "status-msg";
+  try {
+    const isExisting = profiles.some((p) => p.id === id);
+    const method = isExisting ? "PUT" : "POST";
+    const url = isExisting ? `/profiles/${encodeURIComponent(id)}` : "/profiles";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      profStatusEl.textContent = "Profile saved successfully!";
+      profStatusEl.className = "status-msg success";
+      currentProfileId = id;
+      await loadProfiles();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      profStatusEl.textContent = err.detail || "Failed to save profile.";
+      profStatusEl.className = "status-msg error";
+    }
+  } catch (_) {
+    profStatusEl.textContent = "Network error saving profile.";
+    profStatusEl.className = "status-msg error";
+  }
+});
+
+// Knowledge Base Documents Modal Handlers
+btnKbManager.addEventListener("click", async () => {
+  updateActiveProfileLabel();
+  modalKb.classList.add("show");
+  await loadKbDocuments();
+});
+
+kbClose.addEventListener("click", () => modalKb.classList.remove("show"));
+
+async function loadKbDocuments() {
+  kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">Loading documents…</td></tr>';
+  try {
+    const res = await fetch(`/documents?profile_id=${encodeURIComponent(currentProfileId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      renderKbDocs(data.documents || []);
+    } else {
+      kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">Failed to load documents.</td></tr>';
+    }
+  } catch (_) {
+    kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">Network error loading documents.</td></tr>';
+  }
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function renderKbDocs(docs) {
+  kbDocsList.innerHTML = "";
+  if (docs.length === 0) {
+    kbDocsList.innerHTML = '<tr><td colspan="4" class="text-muted">No documents found for this profile.</td></tr>';
+    return;
+  }
+  for (const doc of docs) {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td");
+    tdName.textContent = doc.filename;
+    const tdSize = document.createElement("td");
+    tdSize.textContent = formatBytes(doc.size);
+    const tdTime = document.createElement("td");
+    tdTime.textContent = doc.last_modified ? new Date(doc.last_modified).toLocaleDateString() : "-";
+    const tdActions = document.createElement("td");
+    const delBtn = document.createElement("button");
+    delBtn.className = "kb-btn-delete";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", async () => {
+      if (!confirm(`Delete ${doc.filename}?`)) return;
+      try {
+        const res = await fetch(`/documents/${encodeURIComponent(doc.filename)}?profile_id=${encodeURIComponent(currentProfileId)}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          loadKbDocuments();
+        }
+      } catch (_) { /* ignore */ }
+    });
+    tdActions.appendChild(delBtn);
+    tr.appendChild(tdName);
+    tr.appendChild(tdSize);
+    tr.appendChild(tdTime);
+    tr.appendChild(tdActions);
+    kbDocsList.appendChild(tr);
+  }
+}
+
+kbUploadBtn.addEventListener("click", async () => {
+  const file = kbFileInput.files[0];
+  if (!file) {
+    kbUploadStatus.textContent = "Please select a file first.";
+    kbUploadStatus.className = "status-msg error";
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  kbUploadStatus.textContent = "Uploading & indexing…";
+  kbUploadStatus.className = "status-msg";
+  kbUploadBtn.disabled = true;
+  try {
+    const res = await fetch(`/documents/upload?profile_id=${encodeURIComponent(currentProfileId)}`, {
+      method: "POST",
+      body: formData,
+    });
+    if (res.ok) {
+      kbUploadStatus.textContent = "Document uploaded and indexed successfully!";
+      kbUploadStatus.className = "status-msg success";
+      kbFileInput.value = "";
+      await loadKbDocuments();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      kbUploadStatus.textContent = err.detail || "Upload failed.";
+      kbUploadStatus.className = "status-msg error";
+    }
+  } catch (_) {
+    kbUploadStatus.textContent = "Network error uploading document.";
+    kbUploadStatus.className = "status-msg error";
+  } finally {
+    kbUploadBtn.disabled = false;
+  }
+});
+
+// Benchmarks Modal Handlers
+btnBenchmarks.addEventListener("click", async () => {
+  modalBenchmarks.classList.add("show");
+  bmSummaryChips.innerHTML = "";
+  bmReportContent.textContent = "Fetching latest benchmark analytics…";
+  try {
+    const res = await fetch("/benchmarks/report");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.available && data.report_markdown) {
+        bmReportContent.textContent = data.report_markdown;
+        const winner = data.overall_winner;
+        if (winner && winner.model_name) {
+          const chip = document.createElement("div");
+          chip.className = "bm-chip";
+          chip.innerHTML = `🏆 Top Winner: <strong>${winner.model_name}</strong> (Score: ${(winner.score || 0).toFixed(3)})`;
+          bmSummaryChips.appendChild(chip);
+        }
+        if (data.top_3_models && data.top_3_models.length > 0) {
+          const chip = document.createElement("div");
+          chip.className = "bm-chip";
+          chip.innerHTML = `🥇 Top 3: ${data.top_3_models.map((m) => m.model_name).join(", ")}`;
+          bmSummaryChips.appendChild(chip);
+        }
+        if (data.generated_at) {
+          const chip = document.createElement("div");
+          chip.className = "bm-chip";
+          chip.textContent = `Generated: ${new Date(data.generated_at).toLocaleString()}`;
+          bmSummaryChips.appendChild(chip);
+        }
+      } else {
+        bmReportContent.textContent = "No benchmark report found. Run `uv run python -m src.benchmarks.cli` to generate reports.";
+      }
+    } else {
+      bmReportContent.textContent = "Failed to fetch benchmark report.";
+    }
+  } catch (_) {
+    bmReportContent.textContent = "Network error loading benchmark report.";
+  }
+});
+
+bmClose.addEventListener("click", () => modalBenchmarks.classList.remove("show"));
+
+// Close modals on clicking background overlay
+window.addEventListener("click", (e) => {
+  if (e.target === modalProfile) modalProfile.classList.remove("show");
+  if (e.target === modalKb) modalKb.classList.remove("show");
+  if (e.target === modalBenchmarks) modalBenchmarks.classList.remove("show");
+});
+
 // Load the server-selected language, then render the localized UI.
 (async () => {
   let needsApiKey = false;
@@ -622,6 +938,7 @@ setupKeyEl.addEventListener("keydown", (e) => {
   } catch (_) { /* fall back to English */ }
   applyLanguage();
   currentId = newId();
+  await loadProfiles();
   await loadConversations();
   if (needsApiKey) {
     showSetup();
@@ -629,3 +946,4 @@ setupKeyEl.addEventListener("keydown", (e) => {
     inputEl.focus();
   }
 })();
+

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -15,14 +15,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from .benchmarks.evaluator import BenchmarkSuiteResult
+from .benchmarks.reporter import BenchmarkReporter
 from .bootstrap import build_service, ensure_vector_db
 from .credentials import (
     AuthenticationError,
     get_stored_api_key,
     store_api_key,
 )
+from .ingest import ingest_file_to_vector_db
 from .llm import is_authentication_error, validate_api_key
 from .logging_config import get_logger
+from .profiles import Profile
 from .rag_service import DEFAULT_SESSION_ID, RagService
 from .s3_service import S3StorageService
 from .settings import get_settings
@@ -51,6 +55,7 @@ class ChatRequest(BaseModel):
 
     question: str = Field(..., min_length=1)
     session_id: str = Field(default=DEFAULT_SESSION_ID, min_length=1)
+    profile_id: str | None = Field(default=None, description="Optional tenant/domain profile ID.")
 
 
 class SourceModel(BaseModel):
@@ -103,12 +108,30 @@ class ApiKeyRequest(BaseModel):
     api_key: str = Field(..., min_length=1)
 
 
+class ProfileModel(BaseModel):
+    """Payload for creating or updating a tenant/domain profile."""
+
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    description: str = Field(default="")
+    system_prompt: str | None = None
+    guardrails: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProfileListResponse(BaseModel):
+    """Available tenant profiles and current active default."""
+
+    active_id: str
+    profiles: list[ProfileModel]
+
+
 class DocumentInfo(BaseModel):
     """Metadata for a stored document."""
 
     filename: str
     size: int
     last_modified: str
+    profile_id: str | None = None
 
 
 class DocumentListResponse(BaseModel):
@@ -124,6 +147,19 @@ class UploadResponse(BaseModel):
     filename: str
     storage_type: str = "local"
     message: str
+    profile_id: str | None = None
+
+
+class BenchmarkReportResponse(BaseModel):
+    """Rendered embedding benchmark report and evaluation data."""
+
+    report_markdown: str
+    has_results: bool
+    available: bool = False
+    overall_winner: dict[str, Any] | None = None
+    top_3_models: list[dict[str, Any]] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
 
 
 def _build_service_state(app: FastAPI) -> None:
@@ -287,7 +323,12 @@ async def set_api_key(payload: ApiKeyRequest, request: Request) -> dict[str, str
 async def chat(payload: ChatRequest, service: ServiceDep) -> ChatResponse:
     """Answer a question and return supporting sources."""
     try:
-        answer = service.answer(payload.question, payload.session_id)
+        try:
+            answer = service.answer(
+                payload.question, payload.session_id, profile_id=payload.profile_id
+            )
+        except TypeError:
+            answer = service.answer(payload.question, payload.session_id)
     except Exception as error:
         if is_authentication_error(error):
             raise HTTPException(status_code=401, detail="Invalid or missing API key.") from error
@@ -303,10 +344,20 @@ async def chat(payload: ChatRequest, service: ServiceDep) -> ChatResponse:
 @app.post("/chat/stream")
 async def chat_stream(payload: ChatRequest, service: ServiceDep) -> StreamingResponse:
     """Stream an answer token-by-token as plain text."""
-    retrieval = service.retrieve(payload.question, payload.session_id)
+    try:
+        retrieval = service.retrieve(
+            payload.question, payload.session_id, profile_id=payload.profile_id
+        )
+    except TypeError:
+        retrieval = service.retrieve(payload.question, payload.session_id)
 
     def token_generator():
-        yield from service.stream_answer(payload.question, retrieval, payload.session_id)
+        try:
+            yield from service.stream_answer(
+                payload.question, retrieval, payload.session_id, profile_id=payload.profile_id
+            )
+        except TypeError:
+            yield from service.stream_answer(payload.question, retrieval, payload.session_id)
 
     return StreamingResponse(token_generator(), media_type="text/plain")
 
@@ -322,7 +373,13 @@ async def chat_events(payload: ChatRequest, service: ServiceDep) -> StreamingRes
 
     def event_generator():
         try:
-            for event in service.stream_events(payload.question, payload.session_id):
+            try:
+                events = service.stream_events(
+                    payload.question, payload.session_id, profile_id=payload.profile_id
+                )
+            except TypeError:
+                events = service.stream_events(payload.question, payload.session_id)
+            for event in events:
                 yield json.dumps(event) + "\n"
         except Exception as error:  # surface failures inside the stream
             if is_authentication_error(error):
@@ -392,301 +449,370 @@ async def pin_conversation(
     }
 
 
+# --- Tenant & Profile Management Endpoints ---------------------------------
+
+
+@app.get("/profiles")
+async def list_profiles(service: ServiceDep) -> ProfileListResponse:
+    """List all available tenant/domain profiles and the current active ID."""
+    registry = service.profiles
+    return ProfileListResponse(
+        active_id=registry.active_id,
+        profiles=[
+            ProfileModel(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                system_prompt=p.system_prompt,
+                guardrails=p.guardrails,
+            )
+            for p in registry.list_profiles()
+        ],
+    )
+
+
+@app.post("/profiles", status_code=201)
+async def create_profile(payload: ProfileModel, service: ServiceDep) -> dict[str, str]:
+    """Create a new domain profile with persona and guardrails."""
+    profile = Profile(
+        id=payload.id,
+        name=payload.name,
+        description=payload.description,
+        system_prompt=payload.system_prompt,
+        guardrails=payload.guardrails,
+    )
+    service.update_profile(profile)
+    return {"status": "created", "profile_id": profile.id}
+
+
+@app.put("/profiles/{profile_id}")
+async def update_profile(
+    profile_id: str, payload: ProfileModel, service: ServiceDep
+) -> dict[str, str]:
+    """Update an existing domain profile's persona and guardrails."""
+    profile = Profile(
+        id=profile_id,
+        name=payload.name,
+        description=payload.description,
+        system_prompt=payload.system_prompt,
+        guardrails=payload.guardrails,
+    )
+    service.update_profile(profile)
+    return {"status": "updated", "profile_id": profile.id}
+
+
 # --- Document Management Endpoints -------------------------------------------
+
+
+def _resolve_data_dir(settings: Settings, profile_id: str | None = None) -> Path:
+    """Resolve directory path for a profile or root data path."""
+    if profile_id and profile_id != "default":
+        return settings.data_path / profile_id
+    return settings.data_path
+
+
+async def _handle_local_upload(
+    file: UploadFile, settings: Settings, profile_id: str | None
+) -> UploadResponse:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    target_dir = _resolve_data_dir(settings, profile_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file.filename
+
+    try:
+        content = await file.read()
+        file_path.write_bytes(content)
+        await run_in_threadpool(ingest_file_to_vector_db, file_path, settings, profile_id)
+        return UploadResponse(
+            filename=file.filename,
+            storage_type="local",
+            message="File saved to local storage and indexed successfully.",
+            profile_id=profile_id,
+        )
+    except Exception as e:
+        logger.error("Local file save failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Local save failed: {str(e)}")
+
+
+async def _handle_s3_upload(
+    file: UploadFile, s3_service: S3StorageService | None, profile_id: str | None
+) -> UploadResponse:
+    if not s3_service or not s3_service.enabled:
+        raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
+    content_type = "application/octet-stream"
+    if file.filename:
+        suffix = file.filename.lower().split(".")[-1]
+        if suffix == "pdf":
+            content_type = "application/pdf"
+        elif suffix in ("txt", "md"):
+            content_type = "text/plain"
+
+    file_bytes = await file.read()
+    key_prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
+    target_key = f"{key_prefix}{file.filename or 'unknown'}"
+    try:
+        object_key = await run_in_threadpool(
+            s3_service.upload_file,
+            file_bytes,
+            target_key,
+            content_type,
+        )
+        return UploadResponse(
+            filename=object_key,
+            storage_type="s3",
+            message="File uploaded to S3 successfully.",
+            profile_id=profile_id,
+        )
+    except Exception as e:
+        logger.error("S3 upload failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
 
 
 @app.post("/documents/upload")
 async def upload_document(
     file: UploadFile,
     storage_type: str | None = None,
+    profile_id: str | None = None,
     s3_service: S3ServiceDep = None,
 ) -> UploadResponse:
-    """Upload a document to either local storage or S3.
-
-    Args:
-        file: The file to upload (supports PDF, TXT, MD).
-        storage_type: Either "local" or "s3" to specify storage backend.
-                      If not provided, uses the default from settings.
-        s3_service: Optional S3 service instance (injected if available).
-
-    Returns:
-        Upload response with filename and storage type.
-
-    Raises:
-        HTTPException: If storage type is invalid or upload fails.
-    """
+    """Upload a document to either local storage or S3 with optional tenant profile isolation."""
     settings = get_settings()
-    
-    # Default to S3 if enabled in settings, otherwise local
-    if storage_type is None:
-        storage_type = "s3" if settings.use_s3_storage else "local"
-    
-    if storage_type == "s3":
-        if not s3_service or not s3_service.enabled:
-            raise HTTPException(
-                status_code=400,
-                detail="S3 storage is not enabled or not configured.",
+    backend = storage_type or ("s3" if settings.use_s3_storage else "local")
+    if backend == "s3":
+        return await _handle_s3_upload(file, s3_service, profile_id)
+    if backend == "local":
+        return await _handle_local_upload(file, settings, profile_id)
+    raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+def _list_local_documents(settings: Settings, profile_id: str | None) -> list[DocumentInfo]:
+    target_dir = _resolve_data_dir(settings, profile_id)
+    if not target_dir.exists():
+        return []
+    documents = []
+    # If scoped to a tenant profile, only check that folder; otherwise check all data
+    paths = target_dir.iterdir() if (profile_id and profile_id != "default") else target_dir.rglob("*")
+    for path in sorted(paths):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() in (".pdf", ".txt", ".md"):
+            stat = path.stat()
+            documents.append(
+                DocumentInfo(
+                    filename=path.name,
+                    size=stat.st_size,
+                    last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    profile_id=profile_id or "default",
+                )
             )
-        
-        # Determine content type based on file extension
-        content_type = "application/octet-stream"
-        if file.filename:
-            suffix = file.filename.lower().split(".")[-1]
-            if suffix == "pdf":
-                content_type = "application/pdf"
-            elif suffix in ("txt", "md"):
-                content_type = "text/plain"
-        
-        # Read file content
-        file_bytes = await file.read()
-        
-        # Upload to S3 (blocking call, run in threadpool)
-        try:
-            object_key = await run_in_threadpool(
-                s3_service.upload_file,
-                file_bytes,
-                file.filename or "unknown",
-                content_type,
+    return documents
+
+
+async def _handle_s3_list(s3_service: S3ServiceDep, profile_id: str | None) -> list[DocumentInfo]:
+    if not s3_service or not s3_service.enabled:
+        raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
+    try:
+        files = await run_in_threadpool(s3_service.list_files)
+        prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
+        filtered = [f for f in files if f["filename"].startswith(prefix)] if prefix else files
+        return [
+            DocumentInfo(
+                filename=f["filename"].removeprefix(prefix),
+                size=f["size"],
+                last_modified=f["last_modified"],
+                profile_id=profile_id or "default",
             )
-            return UploadResponse(
-                filename=object_key,
-                storage_type="s3",
-                message="File uploaded to S3 successfully.",
-            )
-        except Exception as e:
-            logger.error("S3 upload failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
-    
-    elif storage_type == "local":
-        # Local storage - save to data directory
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="Filename is required.")
-        
-        file_path = settings.data_path / file.filename
-        settings.data_path.mkdir(parents=True, exist_ok=True)
-        
-        try:
-            content = await file.read()
-            file_path.write_bytes(content)
-            return UploadResponse(
-                filename=file.filename,
-                storage_type="local",
-                message="File saved to local storage successfully.",
-            )
-        except Exception as e:
-            logger.error("Local file save failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"Local save failed: {str(e)}")
-    
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid storage_type '{storage_type}'. Must be 'local' or 's3'.",
-        )
+            for f in filtered
+        ]
+    except Exception as e:
+        logger.error("S3 list failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"S3 list failed: {str(e)}")
 
 
 @app.get("/documents")
 async def list_documents(
     storage_type: str | None = None,
+    profile_id: str | None = None,
     s3_service: S3ServiceDep = None,
 ) -> DocumentListResponse:
-    """List documents from either local storage or S3.
-
-    Args:
-        storage_type: Either "local" or "s3" to specify storage backend.
-                      If not provided, uses the default from settings.
-        s3_service: Optional S3 service instance (injected if available).
-
-    Returns:
-        List of documents with metadata.
-
-    Raises:
-        HTTPException: If storage type is invalid or listing fails.
-    """
+    """List documents from either local storage or S3, optionally scoped by profile."""
     settings = get_settings()
-    
-    # Default to S3 if enabled in settings, otherwise local
-    if storage_type is None:
-        storage_type = "s3" if settings.use_s3_storage else "local"
-    
-    if storage_type == "s3":
-        if not s3_service or not s3_service.enabled:
-            raise HTTPException(
-                status_code=400,
-                detail="S3 storage is not enabled or not configured.",
-            )
-        
-        try:
-            files = await run_in_threadpool(s3_service.list_files)
-            documents = [
-                DocumentInfo(
-                    filename=f["filename"],
-                    size=f["size"],
-                    last_modified=f["last_modified"],
-                )
-                for f in files
-            ]
-            return DocumentListResponse(documents=documents, storage_type="s3")
-        except Exception as e:
-            logger.error("S3 list failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"S3 list failed: {str(e)}")
-    
-    elif storage_type == "local":
-        if not settings.data_path.exists():
-            return DocumentListResponse(documents=[], storage_type="local")
-        
-        documents = []
-        for path in sorted(settings.data_path.rglob("*")):
-            if not path.is_file():
-                continue
-            suffix = path.suffix.lower()
-            if suffix in (".pdf", ".txt", ".md"):
-                stat = path.stat()
-                documents.append(
-                    DocumentInfo(
-                        filename=path.name,
-                        size=stat.st_size,
-                        last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    )
-                )
-        
-        return DocumentListResponse(documents=documents, storage_type="local")
-    
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid storage_type '{storage_type}'. Must be 'local' or 's3'.",
-        )
+    backend = storage_type or ("s3" if settings.use_s3_storage else "local")
+
+    if backend == "s3":
+        docs = await _handle_s3_list(s3_service, profile_id)
+        return DocumentListResponse(documents=docs, storage_type="s3")
+
+    if backend == "local":
+        docs = _list_local_documents(settings, profile_id)
+        return DocumentListResponse(documents=docs, storage_type="local")
+
+    raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+async def _handle_s3_delete(s3_service: S3ServiceDep, filename: str, profile_id: str | None) -> dict[str, str]:
+    if not s3_service or not s3_service.enabled:
+        raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
+    key_prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
+    target_key = f"{key_prefix}{filename}"
+    try:
+        await run_in_threadpool(s3_service.delete_file, target_key)
+        return {"status": "deleted", "filename": filename, "storage_type": "s3", "profile_id": profile_id or "default"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found in S3.")
+    except Exception as e:
+        logger.error("S3 delete failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"S3 delete failed: {str(e)}")
+
+
+def _handle_local_delete(settings: Settings, filename: str, profile_id: str | None) -> dict[str, str]:
+    target_dir = _resolve_data_dir(settings, profile_id)
+    file_path = target_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
+    try:
+        file_path.unlink()
+        return {"status": "deleted", "filename": filename, "storage_type": "local", "profile_id": profile_id or "default"}
+    except Exception as e:
+        logger.error("Local file delete failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Local delete failed: {str(e)}")
 
 
 @app.delete("/documents/{filename}")
 async def delete_document(
     filename: str,
     storage_type: str | None = None,
+    profile_id: str | None = None,
     s3_service: S3ServiceDep = None,
 ) -> dict[str, str]:
-    """Delete a document from either local storage or S3.
-
-    Args:
-        filename: The name of the file to delete.
-        storage_type: Either "local" or "s3" to specify storage backend.
-                      If not provided, uses the default from settings.
-        s3_service: Optional S3 service instance (injected if available).
-
-    Returns:
-        Deletion status response.
-
-    Raises:
-        HTTPException: If storage type is invalid or deletion fails.
-    """
+    """Delete a document from storage for a given profile."""
     settings = get_settings()
-    
-    # Default to S3 if enabled in settings, otherwise local
-    if storage_type is None:
-        storage_type = "s3" if settings.use_s3_storage else "local"
-    
-    if storage_type == "s3":
-        if not s3_service or not s3_service.enabled:
-            raise HTTPException(
-                status_code=400,
-                detail="S3 storage is not enabled or not configured.",
-            )
-        
-        try:
-            await run_in_threadpool(s3_service.delete_file, filename)
-            return {"status": "deleted", "filename": filename, "storage_type": "s3"}
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"File '{filename}' not found in S3.")
-        except Exception as e:
-            logger.error("S3 delete failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"S3 delete failed: {str(e)}")
-    
-    elif storage_type == "local":
-        file_path = settings.data_path / filename
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
-        
-        try:
-            file_path.unlink()
-            return {"status": "deleted", "filename": filename, "storage_type": "local"}
-        except Exception as e:
-            logger.error("Local file delete failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"Local delete failed: {str(e)}")
-    
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid storage_type '{storage_type}'. Must be 'local' or 's3'.",
+    backend = storage_type or ("s3" if settings.use_s3_storage else "local")
+
+    if backend == "s3":
+        return await _handle_s3_delete(s3_service, filename, profile_id)
+
+    if backend == "local":
+        return _handle_local_delete(settings, filename, profile_id)
+
+    raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+async def _handle_s3_download(
+    s3_service: S3ServiceDep, filename: str, profile_id: str | None
+) -> StreamingResponse:
+    if not s3_service or not s3_service.enabled:
+        raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
+    key_prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
+    target_key = f"{key_prefix}{filename}"
+    try:
+        stream = await run_in_threadpool(s3_service.get_file_stream, target_key)
+        content_type = "application/pdf" if filename.lower().endswith(".pdf") else "text/plain"
+        return StreamingResponse(
+            stream,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found in S3.")
+    except Exception as e:
+        logger.error("S3 download failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"S3 download failed: {str(e)}")
 
 
-@app.get("/documents/{filename}/download")
+def _handle_local_download(
+    settings: Settings, filename: str, profile_id: str | None
+) -> FileResponse:
+    target_dir = _resolve_data_dir(settings, profile_id)
+    file_path = target_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
+
+    return FileResponse(
+        file_path,
+        filename=filename,
+        media_type="application/octet-stream",
+    )
+
+
+@app.get("/documents/{filename}/download", response_model=None)
 async def download_document(
     filename: str,
     storage_type: str | None = None,
+    profile_id: str | None = None,
     s3_service: S3ServiceDep = None,
-) -> StreamingResponse:
-    """Download a document from either local storage or S3.
-
-    Args:
-        filename: The name of the file to download.
-        storage_type: Either "local" or "s3" to specify storage backend.
-                      If not provided, uses the default from settings.
-        s3_service: Optional S3 service instance (injected if available).
-
-    Returns:
-        Streaming response with the file content.
-
-    Raises:
-        HTTPException: If storage type is invalid or download fails.
-    """
+) -> StreamingResponse | FileResponse:
+    """Download a document from storage for a given profile."""
     settings = get_settings()
-    
-    # Default to S3 if enabled in settings, otherwise local
-    if storage_type is None:
-        storage_type = "s3" if settings.use_s3_storage else "local"
-    
-    if storage_type == "s3":
-        if not s3_service or not s3_service.enabled:
-            raise HTTPException(
-                status_code=400,
-                detail="S3 storage is not enabled or not configured.",
-            )
-        
+    backend = storage_type or ("s3" if settings.use_s3_storage else "local")
+
+    if backend == "s3":
+        return await _handle_s3_download(s3_service, filename, profile_id)
+
+    if backend == "local":
+        return _handle_local_download(settings, filename, profile_id)
+
+    raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+# --- Benchmark Reports Endpoint ---------------------------------------------
+
+
+@app.get("/benchmarks/report")
+async def get_benchmark_report() -> BenchmarkReportResponse:
+    """Serve the latest embedding benchmark report for the UI dashboard."""
+    report_file = Path("./data/benchmark_report.md")
+    results_file = Path("./data/benchmark_results.json")
+
+    if report_file.exists():
+        markdown_content = report_file.read_text(encoding="utf-8")
+        summary: dict[str, Any] = {}
+        if results_file.exists():
+            try:
+                data = json.loads(results_file.read_text(encoding="utf-8"))
+                summary = {
+                    "total_models": len(data.get("results", [])),
+                    "top_k": data.get("top_k", 5),
+                    "timestamp": data.get("timestamp"),
+                }
+            except Exception as e:
+                logger.debug("Could not parse results file: %s", e)
+        return BenchmarkReportResponse(
+            report_markdown=markdown_content,
+            has_results=True,
+            available=True,
+            summary=summary,
+        )
+
+    if results_file.exists():
         try:
-            stream = await run_in_threadpool(s3_service.get_file_stream, filename)
-            
-            # Determine content type
-            content_type = "application/octet-stream"
-            suffix = filename.lower().split(".")[-1]
-            if suffix == "pdf":
-                content_type = "application/pdf"
-            elif suffix in ("txt", "md"):
-                content_type = "text/plain"
-            
-            return StreamingResponse(
-                stream,
-                media_type=content_type,
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            suite_data = json.loads(results_file.read_text(encoding="utf-8"))
+            suite = BenchmarkSuiteResult.model_validate(suite_data)
+            markdown_content = BenchmarkReporter.generate_markdown_report(suite)
+            ranked = BenchmarkReporter.get_ranked_winners(suite)
+            top_model = ranked[0][1].model_name if ranked else "N/A"
+            winner_dict = {"model_name": top_model, "score": ranked[0][2]} if ranked else None
+            top_3 = [{"model_name": r.model_name, "score": sc} for _, r, sc in ranked[:3]]
+            return BenchmarkReportResponse(
+                report_markdown=markdown_content,
+                has_results=True,
+                available=True,
+                overall_winner=winner_dict,
+                top_3_models=top_3,
+                summary={
+                    "total_models": len(suite.results),
+                    "top_winner": top_model,
+                    "top_k": suite.top_k,
+                    "timestamp": suite.timestamp,
+                },
             )
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"File '{filename}' not found in S3.")
         except Exception as e:
-            logger.error("S3 download failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"S3 download failed: {str(e)}")
-    
-    elif storage_type == "local":
-        file_path = settings.data_path / filename
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
-        
-        return FileResponse(
-            file_path,
-            filename=filename,
-            media_type="application/octet-stream",
-        )
-    
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid storage_type '{storage_type}'. Must be 'local' or 's3'.",
-        )
+            logger.warning("Could not generate report from benchmark_results.json: %s", e)
+
+    return BenchmarkReportResponse(
+        report_markdown="*No benchmark reports found. Run `uv run python -m src.benchmarks.cli` to generate model evaluations.*",
+        has_results=False,
+        available=False,
+        summary={},
+    )

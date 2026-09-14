@@ -124,8 +124,10 @@ class RetrievalGraph:
         settings: Settings,
         profiles: ProfileRegistry | None = None,
         checkpointer: "BaseCheckpointSaver | None" = None,
+        retriever_factory: object | None = None,
     ) -> None:
         self._retriever = retriever
+        self._retriever_factory = retriever_factory
         self._max_retries = max(0, settings.max_retrieval_retries)
         self._self_correct = settings.enable_self_correction
         self._profiles = profiles
@@ -167,6 +169,12 @@ class RetrievalGraph:
     # -- nodes ----------------------------------------------------------------
     def _route_profile(self, state: RetrievalState) -> dict:
         """Classify the question and select the best-matching business profile."""
+        if state.get("profile_id"):
+            assert self._profiles is not None
+            profile = self._profiles.get(state["profile_id"])
+            logger.info("Using designated profile '%s'.", profile.id)
+            return {"profile_id": profile.id}
+
         assert self._profiles is not None and self._router_chain is not None
         choice = self._router_chain.invoke(
             {
@@ -201,13 +209,18 @@ class RetrievalGraph:
 
     def _retrieve(self, state: RetrievalState) -> dict:
         """Fetch candidate documents for the current query (or fused variants)."""
+        retriever = self._retriever
+        profile_id = state.get("profile_id")
+        if profile_id and self._retriever_factory and callable(self._retriever_factory):
+            retriever = self._retriever_factory(profile_id)
+
         queries = state.get("search_queries") if self._multi_query else None
         if queries:
             with ThreadPoolExecutor(max_workers=min(len(queries), 8)) as executor:
-                ranked_lists = list(executor.map(self._retriever.invoke, queries))
+                ranked_lists = list(executor.map(retriever.invoke, queries))
             documents = _reciprocal_rank_fusion(ranked_lists, self._top_k)
             return {"documents": documents}
-        documents = self._retriever.invoke(state["search_query"])
+        documents = retriever.invoke(state["search_query"])
         return {"documents": documents}
 
     def _grade(self, state: RetrievalState) -> dict:
@@ -291,10 +304,14 @@ class RetrievalGraph:
         question: str,
         chat_history: list[BaseMessage] | None = None,
         session_id: str = DEFAULT_THREAD_ID,
+        profile_id: str | None = None,
     ) -> RetrievalState:
         """Execute the graph and return the final state for a single turn."""
+        inputs: dict = {"question": question, "chat_history": chat_history or []}
+        if profile_id:
+            inputs["profile_id"] = profile_id
         return self._graph.invoke(
-            {"question": question, "chat_history": chat_history or []},
+            inputs,
             config=self._config(session_id),
         )
 
@@ -303,9 +320,12 @@ class RetrievalGraph:
         question: str,
         chat_history: list[BaseMessage] | None = None,
         session_id: str = DEFAULT_THREAD_ID,
+        profile_id: str | None = None,
     ) -> Iterator[tuple[str, RetrievalState]]:
         """Yield ``(node_name, state_update)`` pairs as each stage completes."""
-        inputs = {"question": question, "chat_history": chat_history or []}
+        inputs: dict = {"question": question, "chat_history": chat_history or []}
+        if profile_id:
+            inputs["profile_id"] = profile_id
         for update in self._graph.stream(
             inputs, config=self._config(session_id), stream_mode="updates"
         ):

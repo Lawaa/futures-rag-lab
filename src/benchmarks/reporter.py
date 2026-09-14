@@ -148,15 +148,8 @@ class BenchmarkReporter:
         target_path.write_text(suite.model_dump_json(indent=2), encoding="utf-8")
 
     @classmethod
-    def export_markdown_report(
-        cls,
-        suite: BenchmarkSuiteResult,
-        path: Path | str = "./data/benchmark_report.md",
-    ) -> None:
+    def generate_markdown_report(cls, suite: BenchmarkSuiteResult) -> str:
         """Generate a detailed Markdown evaluation report with Top 3 winners."""
-        target_path = Path(path)
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-
         k = suite.top_k
         winners = cls.get_ranked_winners(suite)
 
@@ -252,4 +245,17 @@ class BenchmarkReporter:
             for f in failures:
                 lines.append(f"- **{f.model_name}**: `{f.error}`")
 
-        target_path.write_text("\n".join(lines), encoding="utf-8")
+        return "\n".join(lines)
+
+    @classmethod
+    def export_markdown_report(
+        cls,
+        suite: BenchmarkSuiteResult,
+        path: Path | str = "./data/benchmark_report.md",
+    ) -> None:
+        """Generate and export a detailed Markdown evaluation report."""
+        target_path = Path(path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        report_text = cls.generate_markdown_report(suite)
+        target_path.write_text(report_text, encoding="utf-8")
+
