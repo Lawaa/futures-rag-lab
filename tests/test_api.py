@@ -231,3 +231,166 @@ def test_set_api_key_rejects_invalid_key(monkeypatch) -> None:
     monkeypatch.setattr(api, "validate_api_key", lambda key, settings: False)
     response = client.post("/config/api-key", json={"api_key": "bad-key"})
     assert response.status_code == 401
+
+
+def test_set_app_name() -> None:
+    response = client.post("/config/app-name", json={"app_name": "Custom Trading Desk"})
+    assert response.status_code == 200
+    assert response.json()["app_name"] == "Custom Trading Desk"
+
+    config_res = client.get("/config")
+    assert config_res.status_code == 200
+    assert config_res.json()["app_name"] == "Custom Trading Desk"
+
+
+def test_onboarding_config_success(monkeypatch) -> None:
+    import os
+    import src.api as api
+    from src.settings import get_settings
+
+    sentinel = object()
+    monkeypatch.setattr(api, "validate_api_key", lambda key, settings: True)
+    monkeypatch.setattr(api, "store_api_key", lambda key: None)
+    monkeypatch.setattr(api, "ensure_vector_db", lambda settings: True)
+    monkeypatch.setattr(api, "build_service", lambda settings, key: sentinel)
+    monkeypatch.setattr(api, "_persist_setup_to_env", lambda s: None)
+
+    try:
+        payload = {
+            "language": "hu",
+            "provider": "gemini",
+            "model": "gemini-2.5-flash",
+            "use_s3_storage": False,
+            "api_key": "valid-api-key",
+        }
+        response = client.post("/config/onboarding", json=payload)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["language"] == "hu"
+        assert body["provider"] == "gemini"
+    finally:
+        app.state.service = None
+        app.state.setup_reason = None
+        os.environ.pop("RAG_LANGUAGE", None)
+        os.environ.pop("RAG_LLM_PROVIDER", None)
+        os.environ.pop("RAG_USE_S3_STORAGE", None)
+        os.environ.pop("RAG_SETUP_COMPLETED", None)
+        get_settings.cache_clear()
+
+
+def test_config_setup_endpoint(monkeypatch) -> None:
+    import os
+    import src.api as api
+    from src.settings import get_settings
+
+    sentinel = object()
+    monkeypatch.setattr(api, "validate_api_key", lambda key, settings: True)
+    monkeypatch.setattr(api, "store_api_key", lambda key: None)
+    monkeypatch.setattr(api, "ensure_vector_db", lambda settings: True)
+    monkeypatch.setattr(api, "build_service", lambda settings, key: sentinel)
+    monkeypatch.setattr(api, "_persist_setup_to_env", lambda s: None)
+    monkeypatch.setattr(api, "_persist_aws_credentials_to_file", lambda a, s: None)
+
+    try:
+        payload = {
+            "language": "hu",
+            "llm_provider": "gemini",
+            "model": "gemini-3.5-flash-lite",
+            "use_s3_storage": True,
+            "aws_access_key_id": "AKIA_MOCK_KEY",
+            "aws_secret_access_key": "MOCK_SECRET",
+            "aws_region": "eu-central-1",
+            "aws_s3_bucket_name": "mock-bucket",
+            "api_key": "valid-api-key",
+            "app_name": "Test Trader",
+        }
+        response = client.post("/config/setup", json=payload)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["setup_required"] is False
+        assert body["language"] == "hu"
+        assert body["provider"] == "gemini"
+        assert body["use_s3_storage"] is True
+
+        cfg_res = client.get("/config")
+        assert cfg_res.status_code == 200
+        assert "setup_required" in cfg_res.json()
+    finally:
+        app.state.service = None
+        app.state.setup_reason = None
+        os.environ.pop("RAG_LANGUAGE", None)
+        os.environ.pop("RAG_LLM_PROVIDER", None)
+        os.environ.pop("RAG_USE_S3_STORAGE", None)
+        os.environ.pop("RAG_SETUP_COMPLETED", None)
+        os.environ.pop("RAG_APP_NAME", None)
+        get_settings.cache_clear()
+
+
+def test_upload_document_local(tmp_path, monkeypatch) -> None:
+    import src.api as api
+    from src.settings import get_settings
+
+    settings = get_settings().model_copy(update={"data_path": tmp_path / "data", "use_s3_storage": False})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+    monkeypatch.setattr(api, "ingest_file_to_vector_db", lambda file_path, s, p: 1)
+
+    file_content = b"Sample document text"
+    files = {"file": ("sample.txt", file_content, "text/plain")}
+    response = client.post("/documents/upload?storage_type=local", files=files)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["storage"] == "local"
+    assert body["filename"] == "sample.txt"
+
+
+def test_upload_document_s3_success(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    import src.api as api
+    from src.settings import get_settings
+
+    settings = get_settings().model_copy(update={"use_s3_storage": True})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+    mock_s3 = MagicMock()
+    mock_s3.enabled = True
+    mock_s3.upload_file.return_value = "sample.txt"
+    monkeypatch.setattr(api, "ingest_bytes_to_vector_db", lambda b, f, s, p: 1)
+
+    app.dependency_overrides[api.get_s3_service] = lambda: mock_s3
+    try:
+        files = {"file": ("sample.txt", b"s3 sample content", "text/plain")}
+        response = client.post("/documents/upload", files=files)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "success"
+        assert body["storage"] == "s3"
+        assert body["filename"] == "sample.txt"
+        assert mock_s3.upload_file.called
+    finally:
+        app.dependency_overrides.pop(api.get_s3_service, None)
+
+
+def test_upload_document_s3_no_credentials_error(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    from botocore.exceptions import NoCredentialsError
+    import src.api as api
+    from src.settings import get_settings
+
+    settings = get_settings().model_copy(update={"use_s3_storage": True})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+    mock_s3 = MagicMock()
+    mock_s3.enabled = True
+    mock_s3.upload_file.side_effect = NoCredentialsError()
+
+    app.dependency_overrides[api.get_s3_service] = lambda: mock_s3
+    try:
+        files = {"file": ("sample.txt", b"s3 sample content", "text/plain")}
+        response = client.post("/documents/upload", files=files)
+        assert response.status_code == 400
+        assert "AWS credentials not found or invalid" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(api.get_s3_service, None)
+
+

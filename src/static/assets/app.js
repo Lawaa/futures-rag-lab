@@ -1,9 +1,9 @@
-// --- Localization -------------------------------------------------------
+// --- Localization Dictionary ---------------------------------------------
 const I18N = {
   en: {
     docTitle: "Futures Trading Assistant",
     headerTitle: "Futures Trading Assistant",
-    headerSubtitle: "Ask about margins, contracts, settlement, risk and more",
+    headerSubtitle: "Multi-Domain Intelligence",
     newChat: "New chat",
     conversationsLabel: "Recent conversations",
     noConversations: "No conversations yet",
@@ -16,12 +16,14 @@ const I18N = {
     welcomeText: "Ask a question about your futures trading documents. Try one of these:",
     placeholder: "Type your question...",
     hint: "Press Enter to send · Shift+Enter for a new line",
-    newConversationTitle: "👋 New conversation",
-    newConversationText: "Ask a question about your futures trading documents.",
+    settingsTitle: "Settings",
+    themeDark: "Dark Mode",
+    themeLight: "Light Mode",
     suggestions: [
       "What is the difference between initial and maintenance margin?",
       "How does a futures contract differ from a forward contract?",
       "What happens during a margin call?",
+      "Explain daily mark-to-market settlement.",
     ],
     errorAuth: "Authentication error: the server has no valid API key.",
     errorHttp: (s) => "Something went wrong (HTTP " + s + ").",
@@ -34,7 +36,7 @@ const I18N = {
     statusRewriting: "Refining search…",
     statusAnswering: "Writing answer…",
     setupTitle: "Welcome — one quick step",
-    setupText: "To use the hosted Gemini model, paste your Google AI Studio API key. It is stored securely in your operating system's credential manager and never leaves this device except to call the model.",
+    setupText: "To use the hosted Gemini model, paste your Google AI Studio API key.",
     setupPlaceholder: "Paste your Gemini API key",
     setupSubmit: "Save & continue",
     setupSaving: "Verifying…",
@@ -44,7 +46,7 @@ const I18N = {
   hu: {
     docTitle: "Futures Kereskedési Tudástár",
     headerTitle: "Futures Kereskedési Tudástár",
-    headerSubtitle: "Kérdezzen letétekről, kontraktusokról, elszámolásról, kockázatról és többről",
+    headerSubtitle: "Többdomaines Intelligencia",
     newChat: "Új beszélgetés",
     conversationsLabel: "Legutóbbi beszélgetések",
     noConversations: "Még nincsenek beszélgetések",
@@ -57,12 +59,14 @@ const I18N = {
     welcomeText: "Tegyen fel kérdést a határidős kereskedési dokumentumaival kapcsolatban. Próbálja ki ezeket:",
     placeholder: "Írja be a kérdését...",
     hint: "Küldés: Enter · Új sor: Shift+Enter",
-    newConversationTitle: "👋 Új beszélgetés",
-    newConversationText: "Tegyen fel kérdést a határidős kereskedési dokumentumaival kapcsolatban.",
+    settingsTitle: "Beállítások",
+    themeDark: "Sötét Mód",
+    themeLight: "Világos Mód",
     suggestions: [
       "Mi a különbség a kezdeti és a fenntartási letét között?",
       "Miben különbözik a futures ügylet a forward ügylettől?",
       "Mi történik egy letétfeltöltési felszólítás (margin call) során?",
+      "Magyarázza el a napi piaci elszámolás (mark-to-market) folyamatát.",
     ],
     errorAuth: "Hitelesítési hiba: a szervernek nincs érvényes API-kulcsa.",
     errorHttp: (s) => "Hiba történt (HTTP " + s + ").",
@@ -75,7 +79,7 @@ const I18N = {
     statusRewriting: "Keresés finomítása…",
     statusAnswering: "Válasz írása…",
     setupTitle: "Üdvözöljük — egy gyors lépés",
-    setupText: "A hosztolt Gemini modell használatához illessze be a Google AI Studio API-kulcsát. A kulcs biztonságosan, az operációs rendszer jelszókezelőjében tárolódik, és csak a modell hívásához hagyja el az eszközt.",
+    setupText: "A hosztolt Gemini modell használatához illessze be a Google AI Studio API-kulcsát.",
     setupPlaceholder: "Illessze be a Gemini API-kulcsot",
     setupSubmit: "Mentés és folytatás",
     setupSaving: "Ellenőrzés…",
@@ -86,7 +90,149 @@ const I18N = {
 
 let LANG = "en";
 let T = I18N.en;
+let currentAppName = "Futures Trading Assistant";
 
+// --- DOM Elements --------------------------------------------------------
+const messagesEl = document.getElementById("messages");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const newChatBtn = document.getElementById("new-chat");
+const convEl = document.getElementById("conversations");
+const activeConvTitleEl = document.getElementById("active-conv-title");
+const appBrandNameEl = document.getElementById("app-brand-name");
+const appBrandSubtitleEl = document.getElementById("app-brand-subtitle");
+const sidebarEl = document.getElementById("sidebar");
+const btnSidebarToggle = document.getElementById("btn-sidebar-toggle");
+
+// Theme
+const btnThemeToggle = document.getElementById("btn-theme-toggle");
+const themeIconEl = document.getElementById("theme-icon");
+const themeLabelEl = document.getElementById("theme-label");
+
+// Settings Modal
+const btnSettings = document.getElementById("btn-settings");
+const modalSettings = document.getElementById("modal-settings");
+const settingsClose = document.getElementById("settings-close");
+const settingAppName = document.getElementById("setting-app-name");
+const settingBtnSaveName = document.getElementById("setting-btn-save-name");
+const settingNameStatus = document.getElementById("setting-name-status");
+const settingTheme = document.getElementById("setting-theme");
+const settingLanguage = document.getElementById("setting-language");
+const stProvider = document.getElementById("st-provider");
+const stModel = document.getElementById("st-model");
+const stStorage = document.getElementById("st-storage");
+const stReady = document.getElementById("st-ready");
+const btnRelaunchWizard = document.getElementById("btn-relaunch-wizard");
+
+// Onboarding Modal
+const modalOnboarding = document.getElementById("modal-onboarding");
+const onboardingClose = document.getElementById("onboarding-close");
+const onboardingStepPill = document.getElementById("onboarding-step-pill");
+const obBtnPrev = document.getElementById("ob-btn-prev");
+const obBtnNext = document.getElementById("ob-btn-next");
+const obBtnFinish = document.getElementById("ob-btn-finish");
+const obModelName = document.getElementById("ob-model-name");
+const obGeminiKeyGroup = document.getElementById("ob-gemini-key-group");
+const obApiKey = document.getElementById("ob-api-key");
+const obS3CredsContainer = document.getElementById("ob-s3-creds-container");
+const obLocalCredsContainer = document.getElementById("ob-local-creds-container");
+const obAwsAccessKey = document.getElementById("ob-aws-access-key");
+const obAwsSecretKey = document.getElementById("ob-aws-secret-key");
+const obAwsRegion = document.getElementById("ob-aws-region");
+const obAwsBucket = document.getElementById("ob-aws-bucket");
+const obStatus = document.getElementById("ob-status");
+
+// Profiles & Multi-Tenant
+let profiles = [];
+let currentProfileId = "default";
+const profileSelectEl = document.getElementById("profile-select");
+const btnProfileConfig = document.getElementById("btn-profile-config");
+const btnKbManager = document.getElementById("btn-kb-manager");
+const btnBenchmarks = document.getElementById("btn-benchmarks");
+
+// Modals: Profile, KB, Benchmarks
+const modalProfile = document.getElementById("modal-profile");
+const profClose = document.getElementById("prof-close");
+const profIdEl = document.getElementById("prof-id");
+const profNameEl = document.getElementById("prof-name");
+const profDescEl = document.getElementById("prof-desc");
+const profPromptEl = document.getElementById("prof-prompt");
+const profGuardCitationsEl = document.getElementById("prof-guard-citations");
+const profGuardPhiEl = document.getElementById("prof-guard-phi");
+const profCreateNewBtn = document.getElementById("prof-create-new");
+const profSaveBtn = document.getElementById("prof-save");
+const profStatusEl = document.getElementById("prof-status");
+
+const modalKb = document.getElementById("modal-kb");
+const kbClose = document.getElementById("kb-close");
+const kbActiveProfileEl = document.getElementById("kb-active-profile");
+const kbFileInput = document.getElementById("kb-file-input");
+const kbUploadBtn = document.getElementById("kb-upload-btn");
+const kbUploadStatus = document.getElementById("kb-upload-status");
+const kbDocsList = document.getElementById("kb-docs-list");
+
+const modalBenchmarks = document.getElementById("modal-benchmarks");
+const bmClose = document.getElementById("bm-close");
+const bmSummaryChips = document.getElementById("bm-summary-chips");
+const bmReportContent = document.getElementById("bm-report-content");
+
+const setupOverlay = document.getElementById("setup-overlay");
+const setupKeyEl = document.getElementById("setup-key");
+const setupSubmitEl = document.getElementById("setup-submit");
+const setupErrorEl = document.getElementById("setup-error");
+
+// State
+let currentId = null;
+let busy = false;
+let currentStep = 1;
+
+// --- Theme Management ----------------------------------------------------
+function getSavedTheme() {
+  return localStorage.getItem("rag_theme") || "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("rag_theme", theme);
+  if (theme === "dark") {
+    themeIconEl.textContent = "🌙";
+    themeLabelEl.textContent = T.themeDark;
+    if (settingTheme) settingTheme.value = "dark";
+  } else {
+    themeIconEl.textContent = "☀️";
+    themeLabelEl.textContent = T.themeLight;
+    if (settingTheme) settingTheme.value = "light";
+  }
+}
+
+btnThemeToggle.addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  applyTheme(current === "dark" ? "light" : "dark");
+});
+
+if (settingTheme) {
+  settingTheme.addEventListener("change", (e) => applyTheme(e.target.value));
+}
+
+// Mobile sidebar toggle
+if (btnSidebarToggle) {
+  btnSidebarToggle.addEventListener("click", () => {
+    sidebarEl.classList.toggle("open");
+  });
+}
+
+// --- App Name & Brand Management -----------------------------------------
+function updateAppNameUI(name) {
+  currentAppName = name || "Futures Trading Assistant";
+  if (appBrandNameEl) appBrandNameEl.textContent = currentAppName;
+  if (activeConvTitleEl && !activeConvTitleEl.dataset.isCustom) {
+    activeConvTitleEl.textContent = currentAppName;
+  }
+  document.title = currentAppName;
+  if (settingAppName) settingAppName.value = currentAppName;
+}
+
+// --- Language & Suggestions ----------------------------------------------
 function renderSuggestions() {
   const box = document.getElementById("suggestions");
   if (!box) return;
@@ -101,29 +247,28 @@ function renderSuggestions() {
 
 function applyLanguage() {
   document.documentElement.lang = LANG;
-  document.title = T.docTitle;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const key = el.getAttribute("data-i18n");
     if (typeof T[key] === "string") el.textContent = T[key];
   });
-  inputEl.placeholder = T.placeholder;
-  const setupKey = document.getElementById("setup-key");
-  if (setupKey) setupKey.placeholder = T.setupPlaceholder;
+  if (inputEl) inputEl.placeholder = T.placeholder;
+  if (setupKeyEl) setupKeyEl.placeholder = T.setupPlaceholder;
+  if (settingLanguage) settingLanguage.value = LANG;
+  applyTheme(getSavedTheme());
   renderSuggestions();
 }
 
-const messagesEl = document.getElementById("messages");
-const inputEl = document.getElementById("input");
-const sendBtn = document.getElementById("send");
-const newChatBtn = document.getElementById("new-chat");
-const convEl = document.getElementById("conversations");
+if (settingLanguage) {
+  settingLanguage.addEventListener("change", (e) => {
+    LANG = e.target.value;
+    T = I18N[LANG] || I18N.en;
+    applyLanguage();
+  });
+}
 
-// The active conversation id; a fresh one is generated for each new chat.
-let currentId = null;
-let busy = false;
-
+// --- Utilities -----------------------------------------------------------
 function newId() {
-  const rnd = (window.crypto && crypto.randomUUID)
+  const rnd = window.crypto && crypto.randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2, 11);
   return "web-" + rnd;
@@ -131,7 +276,7 @@ function newId() {
 
 function autoGrow() {
   inputEl.style.height = "auto";
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
 }
 inputEl.addEventListener("input", autoGrow);
 
@@ -139,25 +284,18 @@ function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function renderWelcome() {
-  messagesEl.innerHTML = "";
-  const welcome = document.createElement("div");
-  welcome.className = "welcome";
-  const h2 = document.createElement("h2");
-  h2.textContent = T.welcomeTitle;
-  const p = document.createElement("p");
-  p.textContent = T.welcomeText;
-  const sug = document.createElement("div");
-  sug.className = "suggestions";
-  sug.id = "suggestions";
-  welcome.append(h2, p, sug);
-  messagesEl.appendChild(welcome);
-  renderSuggestions();
+function setBusy(state) {
+  busy = state;
+  sendBtn.disabled = state;
+  inputEl.disabled = state;
 }
 
-// --- Minimal, safe Markdown renderer -----------------------------------
-// Answers arrive as Markdown; render a useful subset to HTML while escaping
-// all content first so nothing can inject markup (XSS-safe).
+function stageLabel(stage) {
+  const key = "status" + stage.charAt(0).toUpperCase() + stage.slice(1);
+  return T[key] || null;
+}
+
+// --- Safe Markdown Renderer ----------------------------------------------
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -166,13 +304,11 @@ function escapeHtml(s) {
 }
 
 function renderInline(s) {
-  // Protect inline code spans from further formatting.
   const codes = [];
   s = s.replace(/`([^`]+)`/g, (_, c) => {
     codes.push(c);
     return "\u0000" + (codes.length - 1) + "\u0000";
   });
-  // Links: only http(s) targets are allowed.
   s = s.replace(
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
     (_, t, u) => '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + "</a>"
@@ -188,7 +324,7 @@ function renderInline(s) {
 function renderMarkdown(src) {
   const lines = escapeHtml(src).replace(/\r\n/g, "\n").split("\n");
   const out = [];
-  const stack = []; // open list types, e.g. ["ol", "ul"]
+  const stack = [];
   let i = 0;
 
   const closeTo = (depth) => {
@@ -198,30 +334,38 @@ function renderMarkdown(src) {
   while (i < lines.length) {
     const line = lines[i];
 
-    // Fenced code block.
     if (/^\s*```/.test(line)) {
       closeTo(0);
+      const langMatch = line.match(/^\s*```([a-zA-Z0-9_-]*)/);
+      const lang = langMatch && langMatch[1] ? langMatch[1] : "code";
       const buf = [];
       i++;
       while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
-      i++; // consume closing fence
-      out.push("<pre><code>" + buf.join("\n") + "</code></pre>");
+      i++;
+      out.push(
+        `<div class="code-block-wrapper">` +
+        `<div class="code-block-header"><span class="code-lang">${lang}</span>` +
+        `<button class="code-copy-btn" onclick="copyCode(this)">Copy</button></div>` +
+        `<pre><code>${buf.join("\n")}</code></pre></div>`
+      );
       continue;
     }
 
-    // Blank line ends any open block.
-    if (/^\s*$/.test(line)) { closeTo(0); i++; continue; }
+    if (/^\s*$/.test(line)) {
+      closeTo(0);
+      i++;
+      continue;
+    }
 
-    // Headings (#, ##, ###+ capped at h3).
     const h = line.match(/^\s*(#{1,6})\s+(.*)$/);
     if (h) {
       closeTo(0);
       const lvl = Math.min(h[1].length, 3);
       out.push("<h" + lvl + ">" + renderInline(h[2]) + "</h" + lvl + ">");
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // List items (ordered or unordered) with indent-based nesting.
     const li = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
     if (li) {
       const depth = Math.floor(li[1].replace(/\t/g, "  ").length / 2) + 1;
@@ -230,20 +374,23 @@ function renderMarkdown(src) {
       if (stack.length === depth && stack[depth - 1] !== type) {
         out.push("</" + stack.pop() + ">");
       }
-      while (stack.length < depth) { out.push("<" + type + ">"); stack.push(type); }
+      while (stack.length < depth) {
+        out.push("<" + type + ">");
+        stack.push(type);
+      }
       out.push("<li>" + renderInline(li[3]) + "</li>");
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // Blockquote.
     const bq = line.match(/^\s*>\s?(.*)$/);
     if (bq) {
       closeTo(0);
       out.push("<blockquote>" + renderInline(bq[1]) + "</blockquote>");
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // Paragraph: gather consecutive plain lines.
     closeTo(0);
     const para = [line];
     i++;
@@ -263,112 +410,275 @@ function renderMarkdown(src) {
   return out.join("\n");
 }
 
+window.copyCode = function (btn) {
+  const wrapper = btn.closest(".code-block-wrapper");
+  if (!wrapper) return;
+  const codeEl = wrapper.querySelector("pre code");
+  if (!codeEl) return;
+  navigator.clipboard.writeText(codeEl.textContent || "").then(() => {
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+  });
+};
+
+// --- Message Rendering & Welcome -----------------------------------------
+function renderWelcome() {
+  messagesEl.innerHTML = "";
+  const welcome = document.createElement("div");
+  welcome.className = "welcome";
+  welcome.id = "welcome";
+
+  const badge = document.createElement("div");
+  badge.className = "welcome-badge";
+  badge.textContent = "✦ AI Knowledge Platform";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = T.welcomeTitle;
+
+  const p = document.createElement("p");
+  p.textContent = T.welcomeText;
+
+  const sug = document.createElement("div");
+  sug.className = "suggestions-grid";
+  sug.id = "suggestions";
+
+  welcome.append(badge, h2, p, sug);
+  messagesEl.appendChild(welcome);
+  renderSuggestions();
+  if (activeConvTitleEl) {
+    activeConvTitleEl.textContent = currentAppName;
+    delete activeConvTitleEl.dataset.isCustom;
+  }
+}
+
 function addMessage(role, text, opts) {
   opts = opts || {};
   const existing = messagesEl.querySelector(".welcome");
   if (existing) existing.remove();
+
   const row = document.createElement("div");
-  row.className = "row " + role;
+  row.className = "msg-row " + role;
 
-  const avatar = document.createElement("div");
-  avatar.className = "avatar " + role;
-  avatar.textContent = role === "user" ? "👤" : "🤖";
-
-  const content = document.createElement("div");
   const bubble = document.createElement("div");
-  bubble.className = "bubble";
+  bubble.className = "msg-bubble";
+
   if (opts.markdown) {
-    bubble.classList.add("md");
     bubble.innerHTML = renderMarkdown(text);
   } else {
     bubble.textContent = text;
   }
-  content.appendChild(bubble);
 
-  row.appendChild(avatar);
-  row.appendChild(content);
+  row.appendChild(bubble);
   messagesEl.appendChild(row);
   scrollToBottom();
-  return { row, bubble, content };
+  return { row, bubble };
 }
 
 function renderSources(container, sources) {
   if (!sources || sources.length === 0) return;
-  const wrap = document.createElement("div");
-  wrap.className = "sources";
+  const card = document.createElement("div");
+  card.className = "sources-card";
+
+  const title = document.createElement("div");
+  title.className = "sources-title";
+  title.textContent = "Referenced Sources";
+  card.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "sources-list";
   for (const s of sources) {
     const pill = document.createElement("span");
-    pill.className = "source-pill";
+    pill.className = "source-chip";
     pill.textContent = "📄 " + s.name + (s.page != null ? " (p. " + s.page + ")" : "");
-    wrap.appendChild(pill);
+    list.appendChild(pill);
   }
-  container.appendChild(wrap);
+  card.appendChild(list);
+  container.appendChild(card);
 }
 
-function setBusy(state) {
-  busy = state;
-  sendBtn.disabled = state;
-  inputEl.disabled = state;
+// --- Chat Streaming ------------------------------------------------------
+async function send(question) {
+  if (busy || !question.trim()) return;
+  const q = question.trim();
+
+  addMessage("user", q);
+  inputEl.value = "";
+  autoGrow();
+  setBusy(true);
+
+  if (activeConvTitleEl && !activeConvTitleEl.dataset.isCustom) {
+    activeConvTitleEl.textContent = q.length > 32 ? q.slice(0, 32) + "…" : q;
+  }
+
+  const { bubble } = addMessage("bot", "");
+  const statusPill = document.createElement("div");
+  statusPill.className = "streaming-status-pill";
+  statusPill.textContent = stageLabel("preparing") || "Preparing search…";
+
+  const answer = document.createElement("div");
+  answer.className = "answer-body";
+  bubble.appendChild(statusPill);
+  bubble.appendChild(answer);
+
+  let raw = "";
+  let done = null;
+
+  try {
+    const res = await fetch("/chat/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q,
+        session_id: currentId,
+        profile_id: currentProfileId,
+      }),
+    });
+
+    if (!res.ok || !res.body) {
+      statusPill.remove();
+      const detail = res.status === 401 ? T.errorAuth : T.errorHttp(res.status);
+      bubble.textContent = "⚠️ " + detail;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        const event = JSON.parse(line);
+
+        if (event.type === "status") {
+          const label = stageLabel(event.stage);
+          if (label) statusPill.textContent = label;
+        } else if (event.type === "token") {
+          if (raw === "") {
+            const answering = stageLabel("answering");
+            if (answering) statusPill.textContent = answering;
+          }
+          raw += event.text;
+          answer.textContent = raw;
+          scrollToBottom();
+        } else if (event.type === "done") {
+          done = event;
+        } else if (event.type === "error") {
+          statusPill.remove();
+          const detail = event.code === "auth" ? T.errorAuth : (event.detail || T.errorHttp(500));
+          bubble.textContent = "⚠️ " + detail;
+          return;
+        }
+      }
+    }
+
+    statusPill.remove();
+    let finalText = raw;
+    if (done && done.note) finalText = done.note + "\n\n" + raw;
+    answer.innerHTML = renderMarkdown(finalText);
+    if (done) renderSources(bubble, done.sources);
+    scrollToBottom();
+    loadConversations();
+  } catch (err) {
+    statusPill.remove();
+    if (!raw) bubble.textContent = T.errorNetwork;
+  } finally {
+    setBusy(false);
+    inputEl.focus();
+  }
 }
 
-// --- Conversation history (sidebar) ------------------------------------
+sendBtn.addEventListener("click", () => send(inputEl.value));
+inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send(inputEl.value);
+  }
+});
+
+messagesEl.addEventListener("click", (e) => {
+  if (e.target.classList.contains("chip")) {
+    send(e.target.textContent);
+  }
+});
+
+newChatBtn.addEventListener("click", startNewChat);
+
+function startNewChat() {
+  currentId = newId();
+  renderWelcome();
+  highlightActive();
+  inputEl.focus();
+}
+
+// --- Conversations & Sidebar ---------------------------------------------
 function highlightActive() {
   convEl.querySelectorAll(".conv-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.id === currentId);
   });
 }
 
-function renderConversations(list) {
+function renderConversations(convs) {
   convEl.innerHTML = "";
-  if (!list || list.length === 0) {
+  if (!convs || convs.length === 0) {
     const empty = document.createElement("div");
-    empty.className = "conv-empty";
+    empty.className = "conv-section-label";
     empty.textContent = T.noConversations;
     convEl.appendChild(empty);
     return;
   }
-  for (const conv of list) {
+
+  for (const conv of convs) {
     const item = document.createElement("div");
-    item.className = "conv-item" + (conv.pinned ? " pinned" : "");
+    item.className = "conv-item";
     item.dataset.id = conv.id;
 
-    const title = document.createElement("div");
-    title.className = "conv-title";
-    title.textContent = conv.title;
-    title.title = conv.title;
+    if (conv.pinned) {
+      const pinIcon = document.createElement("span");
+      pinIcon.className = "conv-pin-icon";
+      pinIcon.textContent = "📌";
+      item.appendChild(pinIcon);
+    }
 
-    const pin = document.createElement("button");
-    pin.className = "conv-pin";
-    pin.textContent = conv.pinned ? "📌" : "📍";
-    pin.title = conv.pinned ? T.unpinTitle : T.pinTitle;
-    pin.addEventListener("click", (e) => {
+    const title = document.createElement("span");
+    title.className = "conv-title";
+    title.textContent = conv.title || "Untitled";
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "conv-btn";
+    pinBtn.textContent = conv.pinned ? "📍" : "📌";
+    pinBtn.title = conv.pinned ? T.unpinTitle : T.pinTitle;
+    pinBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       togglePin(conv.id, !conv.pinned);
     });
 
-    const rename = document.createElement("button");
-    rename.className = "conv-rename";
-    rename.textContent = "✏️";
-    rename.title = T.renameTitle;
-    rename.addEventListener("click", (e) => {
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "conv-btn";
+    renameBtn.textContent = "✏️";
+    renameBtn.title = T.renameTitle;
+    renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       renameConversation(conv.id, conv.title);
     });
 
-    const del = document.createElement("button");
-    del.className = "conv-delete";
-    del.textContent = "🗑";
-    del.title = T.deleteTitle;
-    del.addEventListener("click", (e) => {
+    const delBtn = document.createElement("button");
+    delBtn.className = "conv-btn delete";
+    delBtn.textContent = "🗑";
+    delBtn.title = T.deleteTitle;
+    delBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       deleteConversation(conv.id);
     });
 
-    item.appendChild(title);
-    item.appendChild(pin);
-    item.appendChild(rename);
-    item.appendChild(del);
-    item.addEventListener("click", () => openConversation(conv.id));
+    item.append(title, pinBtn, renameBtn, delBtn);
+    item.addEventListener("click", () => openConversation(conv.id, conv.title));
     convEl.appendChild(item);
   }
   highlightActive();
@@ -381,9 +691,13 @@ async function loadConversations() {
   } catch (_) { /* ignore */ }
 }
 
-async function openConversation(id) {
+async function openConversation(id, title) {
   if (busy) return;
   currentId = id;
+  if (activeConvTitleEl) {
+    activeConvTitleEl.textContent = title || "Conversation";
+    activeConvTitleEl.dataset.isCustom = "true";
+  }
   try {
     const res = await fetch("/conversations/" + encodeURIComponent(id));
     if (!res.ok) return;
@@ -437,218 +751,200 @@ async function togglePin(id, pinned) {
   loadConversations();
 }
 
-function startNewChat() {
-  currentId = newId();
-  renderWelcome();
-  highlightActive();
-  inputEl.focus();
+// --- Onboarding Wizard Controller ----------------------------------------
+function showOnboarding(step = 1) {
+  currentStep = step;
+  updateOnboardingStep();
+  modalOnboarding.classList.add("show");
 }
 
-function stageLabel(stage) {
-  const key = "status" + stage.charAt(0).toUpperCase() + stage.slice(1);
-  return T[key] || null;
+function updateOnboardingStep() {
+  document.querySelectorAll(".wizard-step").forEach((el, idx) => {
+    el.classList.toggle("active", idx + 1 === currentStep);
+  });
+  onboardingStepPill.textContent = `Step ${currentStep} of 4`;
+  obBtnPrev.style.display = currentStep > 1 ? "block" : "none";
+  obBtnNext.style.display = currentStep < 4 ? "block" : "none";
+  obBtnFinish.style.display = currentStep === 4 ? "block" : "none";
+
+  if (currentStep === 2) {
+    const provider = document.querySelector('input[name="ob-provider"]:checked')?.value || "gemini";
+    if (obGeminiKeyGroup) obGeminiKeyGroup.style.display = provider === "gemini" ? "block" : "none";
+  }
+
+  if (currentStep === 4) {
+    const isS3 = document.querySelector('input[name="ob-storage"]:checked')?.value === "s3";
+    if (obS3CredsContainer) obS3CredsContainer.style.display = isS3 ? "block" : "none";
+    if (obLocalCredsContainer) obLocalCredsContainer.style.display = isS3 ? "none" : "block";
+  }
 }
 
-async function send(question) {
-  if (busy || !question.trim()) return;
-  const q = question.trim();
-  addMessage("user", q);
-  inputEl.value = "";
-  autoGrow();
-  setBusy(true);
+// Language toggle inside wizard immediately switches UI dictionary
+document.querySelectorAll('input[name="ob-lang"]').forEach((radio) => {
+  radio.addEventListener("change", (e) => {
+    LANG = e.target.value;
+    T = I18N[LANG] || I18N.en;
+    applyLanguage();
+  });
+});
 
-  // Bot bubble with a live status indicator that updates per pipeline stage.
-  const { bubble, content } = addMessage("bot", "");
-  const status = document.createElement("div");
-  status.className = "status-line";
-  status.innerHTML =
-    '<div class="typing"><span></span><span></span><span></span></div>' +
-    '<span class="status-text"></span>';
-  const statusText = status.querySelector(".status-text");
-  const answer = document.createElement("div");
-  answer.className = "answer-body";
-  bubble.appendChild(status);
-  bubble.appendChild(answer);
+// Provider toggle inside wizard
+document.querySelectorAll('input[name="ob-provider"]').forEach((radio) => {
+  radio.addEventListener("change", (e) => {
+    const isGemini = e.target.value === "gemini";
+    if (obGeminiKeyGroup) obGeminiKeyGroup.style.display = isGemini ? "block" : "none";
+    if (obModelName) {
+      obModelName.value = isGemini ? "gemini-3.5-flash-lite" : "qwen2.5:7b";
+    }
+  });
+});
 
-  let raw = "";
-  let done = null;
+obBtnNext.addEventListener("click", () => {
+  if (currentStep < 4) {
+    currentStep++;
+    updateOnboardingStep();
+  }
+});
+
+obBtnPrev.addEventListener("click", () => {
+  if (currentStep > 1) {
+    currentStep--;
+    updateOnboardingStep();
+  }
+});
+
+onboardingClose.addEventListener("click", () => modalOnboarding.classList.remove("show"));
+
+obBtnFinish.addEventListener("click", async () => {
+  const lang = document.querySelector('input[name="ob-lang"]:checked')?.value || "en";
+  const provider = document.querySelector('input[name="ob-provider"]:checked')?.value || "gemini";
+  const model = obModelName ? obModelName.value.trim() : (provider === "gemini" ? "gemini-3.5-flash-lite" : "qwen2.5:7b");
+  const storage = document.querySelector('input[name="ob-storage"]:checked')?.value || "local";
+  const isS3 = storage === "s3";
+  const apiKey = obApiKey ? obApiKey.value.trim() : "";
+  const awsAccessKey = obAwsAccessKey ? obAwsAccessKey.value.trim() : "";
+  const awsSecretKey = obAwsSecretKey ? obAwsSecretKey.value.trim() : "";
+  const awsRegion = obAwsRegion ? obAwsRegion.value.trim() : "eu-central-1";
+  const awsBucket = obAwsBucket ? obAwsBucket.value.trim() : "futures-rag-lab-docs";
+
+  if (provider === "gemini" && !apiKey) {
+    obStatus.textContent = "Google AI Studio API key is required for Gemini.";
+    obStatus.className = "status-msg error";
+    return;
+  }
+
+  if (isS3 && (!awsAccessKey || !awsSecretKey)) {
+    obStatus.textContent = "AWS Access Key ID and Secret Access Key are required for S3.";
+    obStatus.className = "status-msg error";
+    return;
+  }
+
+  obStatus.textContent = "Configuring backend and validating connection…";
+  obStatus.className = "status-msg";
+  obBtnFinish.disabled = true;
 
   try {
-    const res = await fetch("/chat/events", {
+    const payload = {
+      language: lang,
+      llm_provider: provider,
+      model: model,
+      api_key: apiKey || null,
+      use_s3_storage: isS3,
+      aws_access_key_id: isS3 ? awsAccessKey : null,
+      aws_secret_access_key: isS3 ? awsSecretKey : null,
+      aws_region: isS3 ? awsRegion : null,
+      aws_s3_bucket_name: isS3 ? awsBucket : null,
+      app_name: currentAppName,
+    };
+
+    const res = await fetch("/config/setup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question: q,
-        session_id: currentId,
-        profile_id: currentProfileId,
-      }),
+      body: JSON.stringify(payload),
     });
 
-    if (!res.ok || !res.body) {
-      status.remove();
-      const detail = res.status === 401 ? T.errorAuth : T.errorHttp(res.status);
-      bubble.textContent = "⚠️ " + detail;
-      return;
+    if (res.ok) {
+      obStatus.textContent = "Setup complete! Launching assistant…";
+      obStatus.className = "status-msg success";
+      setTimeout(async () => {
+        modalOnboarding.classList.remove("show");
+        LANG = lang;
+        T = I18N[LANG] || I18N.en;
+        applyLanguage();
+        await loadBackendStatus();
+        await loadProfiles();
+        inputEl.focus();
+      }, 700);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      obStatus.textContent = err.detail || "Configuration failed. Please check credentials.";
+      obStatus.className = "status-msg error";
     }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { value, done: streamDone } = await reader.read();
-      if (streamDone) break;
-      buffer += decoder.decode(value, { stream: true });
-      let nl;
-      while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line) continue;
-        const event = JSON.parse(line);
-
-        if (event.type === "status") {
-          const label = stageLabel(event.stage);
-          if (label) statusText.textContent = label;
-        } else if (event.type === "token") {
-          // First token: switch the bubble from "thinking" to answering.
-          if (raw === "") {
-            bubble.classList.add("md");
-            const answering = stageLabel("answering");
-            if (answering) statusText.textContent = answering;
-          }
-          raw += event.text;
-          answer.textContent = raw;
-          scrollToBottom();
-        } else if (event.type === "done") {
-          done = event;
-        } else if (event.type === "error") {
-          status.remove();
-          const detail = event.code === "auth" ? T.errorAuth : (event.detail || T.errorHttp(500));
-          bubble.textContent = "⚠️ " + detail;
-          return;
-        }
-      }
-    }
-
-    status.remove();
-    let finalText = raw;
-    if (done && done.note) finalText = done.note + "\n\n" + raw;
-    answer.classList.add("md");
-    answer.innerHTML = renderMarkdown(finalText);
-    if (done) renderSources(content, done.sources);
-    scrollToBottom();
-    loadConversations();
-  } catch (err) {
-    status.remove();
-    if (!raw) bubble.textContent = T.errorNetwork;
+  } catch (_) {
+    obStatus.textContent = "Network error connecting to configuration service.";
+    obStatus.className = "status-msg error";
   } finally {
-    setBusy(false);
-    inputEl.focus();
-  }
-}
-
-sendBtn.addEventListener("click", () => send(inputEl.value));
-
-inputEl.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    send(inputEl.value);
+    obBtnFinish.disabled = false;
   }
 });
 
-messagesEl.addEventListener("click", (e) => {
-  if (e.target.classList.contains("chip")) {
-    send(e.target.textContent);
-  }
+// --- Settings Modal Controller -------------------------------------------
+btnSettings.addEventListener("click", async () => {
+  modalSettings.classList.add("show");
+  settingNameStatus.textContent = "";
+  await loadBackendStatus();
 });
 
-newChatBtn.addEventListener("click", startNewChat);
+settingsClose.addEventListener("click", () => modalSettings.classList.remove("show"));
 
-// --- First-run setup (Gemini API key) -----------------------------------
-const setupOverlay = document.getElementById("setup-overlay");
-const setupKeyEl = document.getElementById("setup-key");
-const setupSubmitEl = document.getElementById("setup-submit");
-const setupErrorEl = document.getElementById("setup-error");
-
-function showSetup() {
-  setupOverlay.classList.add("show");
-  setupKeyEl.focus();
-}
-
-async function submitApiKey() {
-  const key = setupKeyEl.value.trim();
-  if (!key) return;
-  setupErrorEl.textContent = "";
-  setupSubmitEl.disabled = true;
-  setupSubmitEl.textContent = T.setupSaving;
+settingBtnSaveName.addEventListener("click", async () => {
+  const newName = settingAppName.value.trim();
+  if (!newName) return;
+  settingNameStatus.textContent = "Saving…";
+  settingNameStatus.className = "status-msg";
   try {
-    const res = await fetch("/config/api-key", {
+    const res = await fetch("/config/app-name", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: key }),
+      body: JSON.stringify({ app_name: newName }),
     });
     if (res.ok) {
-      setupOverlay.classList.remove("show");
-      setupKeyEl.value = "";
-      inputEl.focus();
-      return;
+      updateAppNameUI(newName);
+      settingNameStatus.textContent = "Brand name updated successfully!";
+      settingNameStatus.className = "status-msg success";
+    } else {
+      settingNameStatus.textContent = "Failed to update name.";
+      settingNameStatus.className = "status-msg error";
     }
-    setupErrorEl.textContent = res.status === 401 ? T.setupInvalid : T.setupError;
   } catch (_) {
-    setupErrorEl.textContent = T.setupError;
-  } finally {
-    setupSubmitEl.disabled = false;
-    setupSubmitEl.textContent = T.setupSubmit;
-  }
-}
-
-setupSubmitEl.addEventListener("click", submitApiKey);
-setupKeyEl.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    submitApiKey();
+    settingNameStatus.textContent = "Network error updating name.";
+    settingNameStatus.className = "status-msg error";
   }
 });
 
-// --- Multi-Tenant & Domain Profile State & Controls ----------------------
-let profiles = [];
-let currentProfileId = "default";
+btnRelaunchWizard.addEventListener("click", () => {
+  modalSettings.classList.remove("show");
+  showOnboarding(1);
+});
 
-const profileSelectEl = document.getElementById("profile-select");
-const btnProfileConfig = document.getElementById("btn-profile-config");
-const btnKbManager = document.getElementById("btn-kb-manager");
-const btnBenchmarks = document.getElementById("btn-benchmarks");
+async function loadBackendStatus() {
+  try {
+    const res = await fetch("/config");
+    if (res.ok) {
+      const cfg = await res.json();
+      if (cfg.app_name) updateAppNameUI(cfg.app_name);
+      if (stProvider) stProvider.textContent = cfg.provider || "gemini";
+      if (stModel) stModel.textContent = cfg.model || "gemini-2.5-flash";
+      if (stStorage) stStorage.textContent = cfg.use_s3_storage ? "Amazon S3 Bucket" : "Local Filesystem";
+      if (stReady) {
+        stReady.textContent = cfg.ready ? "Active & Ready" : (cfg.needs_api_key ? "Needs API Key" : "Initializing");
+        stReady.className = "status-badge " + (cfg.ready ? "ready" : "not-ready");
+      }
+    }
+  } catch (_) { /* ignore */ }
+}
 
-// Modals
-const modalProfile = document.getElementById("modal-profile");
-const modalKb = document.getElementById("modal-kb");
-const modalBenchmarks = document.getElementById("modal-benchmarks");
-
-// Profile modal fields
-const profClose = document.getElementById("prof-close");
-const profIdEl = document.getElementById("prof-id");
-const profNameEl = document.getElementById("prof-name");
-const profDescEl = document.getElementById("prof-desc");
-const profPromptEl = document.getElementById("prof-prompt");
-const profGuardCitationsEl = document.getElementById("prof-guard-citations");
-const profGuardPhiEl = document.getElementById("prof-guard-phi");
-const profCreateNewBtn = document.getElementById("prof-create-new");
-const profSaveBtn = document.getElementById("prof-save");
-const profStatusEl = document.getElementById("prof-status");
-
-// KB modal fields
-const kbClose = document.getElementById("kb-close");
-const kbActiveProfileEl = document.getElementById("kb-active-profile");
-const kbFileInput = document.getElementById("kb-file-input");
-const kbUploadBtn = document.getElementById("kb-upload-btn");
-const kbUploadStatus = document.getElementById("kb-upload-status");
-const kbDocsList = document.getElementById("kb-docs-list");
-
-// Benchmarks modal fields
-const bmClose = document.getElementById("bm-close");
-const bmSummaryChips = document.getElementById("bm-summary-chips");
-const bmReportContent = document.getElementById("bm-report-content");
-
+// --- Profiles Controller -------------------------------------------------
 async function loadProfiles() {
   try {
     const res = await fetch("/profiles");
@@ -685,7 +981,6 @@ profileSelectEl.addEventListener("change", (e) => {
   updateActiveProfileLabel();
 });
 
-// Profile Modal Handlers
 btnProfileConfig.addEventListener("click", () => {
   const p = profiles.find((x) => x.id === currentProfileId);
   if (p) {
@@ -767,7 +1062,7 @@ profSaveBtn.addEventListener("click", async () => {
   }
 });
 
-// Knowledge Base Documents Modal Handlers
+// --- Knowledge Base Manager ----------------------------------------------
 btnKbManager.addEventListener("click", async () => {
   updateActiveProfileLabel();
   modalKb.classList.add("show");
@@ -823,16 +1118,11 @@ function renderKbDocs(docs) {
         const res = await fetch(`/documents/${encodeURIComponent(doc.filename)}?profile_id=${encodeURIComponent(currentProfileId)}`, {
           method: "DELETE",
         });
-        if (res.ok) {
-          loadKbDocuments();
-        }
+        if (res.ok) loadKbDocuments();
       } catch (_) { /* ignore */ }
     });
     tdActions.appendChild(delBtn);
-    tr.appendChild(tdName);
-    tr.appendChild(tdSize);
-    tr.appendChild(tdTime);
-    tr.appendChild(tdActions);
+    tr.append(tdName, tdSize, tdTime, tdActions);
     kbDocsList.appendChild(tr);
   }
 }
@@ -872,7 +1162,7 @@ kbUploadBtn.addEventListener("click", async () => {
   }
 });
 
-// Benchmarks Modal Handlers
+// --- Benchmarks Viewer ---------------------------------------------------
 btnBenchmarks.addEventListener("click", async () => {
   modalBenchmarks.classList.add("show");
   bmSummaryChips.innerHTML = "";
@@ -896,12 +1186,6 @@ btnBenchmarks.addEventListener("click", async () => {
           chip.innerHTML = `🥇 Top 3: ${data.top_3_models.map((m) => m.model_name).join(", ")}`;
           bmSummaryChips.appendChild(chip);
         }
-        if (data.generated_at) {
-          const chip = document.createElement("div");
-          chip.className = "bm-chip";
-          chip.textContent = `Generated: ${new Date(data.generated_at).toLocaleString()}`;
-          bmSummaryChips.appendChild(chip);
-        }
       } else {
         bmReportContent.textContent = "No benchmark report found. Run `uv run python -m src.benchmarks.cli` to generate reports.";
       }
@@ -915,16 +1199,17 @@ btnBenchmarks.addEventListener("click", async () => {
 
 bmClose.addEventListener("click", () => modalBenchmarks.classList.remove("show"));
 
-// Close modals on clicking background overlay
+// Overlay click to close
 window.addEventListener("click", (e) => {
   if (e.target === modalProfile) modalProfile.classList.remove("show");
   if (e.target === modalKb) modalKb.classList.remove("show");
   if (e.target === modalBenchmarks) modalBenchmarks.classList.remove("show");
+  if (e.target === modalSettings) modalSettings.classList.remove("show");
 });
 
-// Load the server-selected language, then render the localized UI.
+// --- Initialization ------------------------------------------------------
 (async () => {
-  let needsApiKey = false;
+  let needsOnboarding = false;
   try {
     const res = await fetch("/config");
     if (res.ok) {
@@ -933,17 +1218,22 @@ window.addEventListener("click", (e) => {
         LANG = cfg.language;
         T = I18N[LANG];
       }
-      needsApiKey = Boolean(cfg.needs_api_key);
+      if (cfg.app_name) updateAppNameUI(cfg.app_name);
+      if (cfg.setup_required || !cfg.ready || cfg.needs_api_key) {
+        needsOnboarding = true;
+      }
     }
-  } catch (_) { /* fall back to English */ }
+  } catch (_) { /* fall back to defaults */ }
+
+  applyTheme(getSavedTheme());
   applyLanguage();
   currentId = newId();
   await loadProfiles();
   await loadConversations();
-  if (needsApiKey) {
-    showSetup();
+
+  if (needsOnboarding) {
+    showOnboarding(1);
   } else {
     inputEl.focus();
   }
 })();
-

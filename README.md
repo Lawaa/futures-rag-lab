@@ -161,44 +161,42 @@ powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 ```powershell
 uv run main.py
-
 ```
 
-This starts the **guided setup wizard**, which asks, in order:
+This starts the **FastAPI Web Server** and opens your browser at **`http://127.0.0.1:8000`** with the sleek **ChatGPT / Grok-styled Web UI**.
 
+On first run, the **Browser Setup & Onboarding Wizard** automatically guides you through:
 1. **Language** - English or Hungarian (Magyar).
-2. **Model backend** - hosted **Google Gemini** or a **local Ollama** model.
-3. **AWS S3 Cloud Storage** - optional interactive configuration for cloud document storage.
-4. **API key** - only when Gemini is chosen and no stored key is found.
-5. **Interface** - the browser **Web UI** or the **command line**.
+2. **Model backend** - Hosted **Google Gemini** or a local **Ollama** model.
+3. **Storage** - Embedded local ChromaDB / SQLite or **Amazon S3 Cloud Object Store**.
+4. **API Key & Verification** - Direct key validation and encrypted storage.
 
-Your choices drive everything from there, so `uv run main.py` is the single entry
-point for both the web UI and the terminal chat.
+> 💡 **Prefer the terminal?** Launch the legacy interactive terminal assistant at any time using:
+> ```powershell
+> uv run main.py --cli
+> ```
 
 ---
 
 ## 🌐 Run as an HTTP API (FastAPI) directly
 
-Choosing **Web UI** in the wizard launches the FastAPI service for you. To start
-the server directly (e.g. for deployment), run the ASGI app with `uvicorn`:
+You can also launch the server directly without opening a browser:
 
 ```bash
 uv run uvicorn src.api:app --host 127.0.0.1 --port 8000
-
 ```
 
-Then open **`http://127.0.0.1:8000`** in a browser for the built-in chat web UI - a
-clean, no-setup interface designed for non-technical users (suggested questions,
-live pipeline-progress indicator, streaming answers, sources shown per answer, and
-a "New chat" button). Interactive API docs are at `http://127.0.0.1:8000/docs`.
+Then open **`http://127.0.0.1:8000`** in a browser for the built-in ChatGPT / Grok style Web UI. Interactive API docs are at `http://127.0.0.1:8000/docs`.
 
 Key endpoints:
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/` | Browser chat web UI |
+| `GET` | `/` | Browser chat web UI (Grok / ChatGPT style) |
 | `GET` | `/health` | Liveness probe |
-| `GET` | `/config` | Runtime settings + readiness for the web UI (language, provider, setup state) |
+| `GET` | `/config` | Runtime settings + readiness (language, provider, app name, setup state) |
+| `POST` | `/config/onboarding` | Full web setup wizard submission (language, provider, model, S3, API key) |
+| `POST` | `/config/app-name` | Live dynamic branding update for application title |
 | `POST` | `/config/api-key` | Store a Gemini API key at runtime and make the assistant ready |
 | `POST` | `/chat` | Answer a question, returns `{ answer, sources, grounded }` |
 | `POST` | `/chat/stream` | Stream the answer token-by-token (plain text) |
@@ -209,10 +207,14 @@ Key endpoints:
 | `PATCH` | `/conversations/{id}/pin` | Pin/unpin a conversation so it survives auto-pruning |
 | `DELETE` | `/conversations/{id}` | Permanently delete a saved conversation |
 | `DELETE` | `/sessions/{session_id}` | Clear a conversation's history |
+| `GET` | `/profiles` | List multi-tenant domain profiles |
+| `POST` | `/profiles` | Create a new tenant domain profile |
+| `PUT` | `/profiles/{id}` | Update domain profile system prompt and guardrails |
 | `GET` | `/documents` | List stored documents (from local storage or S3) |
-| `POST` | `/documents/upload` | Upload a new document to storage |
+| `POST` | `/documents/upload` | Upload a new document to profile storage namespace |
 | `DELETE` | `/documents/{filename}` | Delete a document from storage |
 | `GET` | `/documents/{filename}/download` | Download a document stream |
+| `GET` | `/benchmarks/report` | Retrieve embedding model benchmark analytics and rankings |
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat\

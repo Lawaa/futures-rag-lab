@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from langchain_chroma import Chroma
@@ -68,15 +69,22 @@ def _split_documents(documents: list[Document], settings: Settings) -> list[Docu
     return splitter.split_documents(documents)
 
 
-def ingest_file_to_vector_db(
-    file_path: Path, settings: Settings, profile_id: str | None = None
+def ingest_bytes_to_vector_db(
+    file_bytes: bytes, filename: str, settings: Settings, profile_id: str | None = None
 ) -> int:
-    """Ingest a single document into the appropriate tenant vector store collection."""
-    suffix = file_path.suffix.lower()
+    """Ingest raw document bytes into ChromaDB for a given profile or default."""
+    suffix = Path(filename).suffix.lower()
+    docs: list[Document] = []
     if suffix in _TEXT_SUFFIXES:
-        docs = _load_text_file(file_path)
+        text = file_bytes.decode("utf-8", errors="replace")
+        if text.strip():
+            docs = [Document(page_content=text, metadata={"source": filename})]
     elif suffix == ".pdf":
-        docs = _load_pdf_file(file_path)
+        reader = PdfReader(BytesIO(file_bytes))
+        for page_num, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            if text.strip():
+                docs.append(Document(page_content=text, metadata={"source": filename, "page": page_num}))
     else:
         return 0
 
@@ -91,8 +99,22 @@ def ingest_file_to_vector_db(
         persist_directory=str(settings.db_path),
         collection_name=collection_name,
     )
-    logger.info("Ingested %d chunks from '%s' into collection '%s'.", len(chunks), file_path.name, collection_name)
+    logger.info(
+        "Ingested %d chunks from '%s' into collection '%s'.",
+        len(chunks),
+        filename,
+        collection_name,
+    )
     return len(chunks)
+
+
+def ingest_file_to_vector_db(
+    file_path: Path, settings: Settings, profile_id: str | None = None
+) -> int:
+    """Ingest a single document into the appropriate tenant vector store collection."""
+    if not file_path.exists():
+        return 0
+    return ingest_bytes_to_vector_db(file_path.read_bytes(), file_path.name, settings, profile_id)
 
 
 def build_vector_db(settings: Settings, profile_id: str | None = None) -> bool:

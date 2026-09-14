@@ -15,21 +15,24 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from botocore.exceptions import NoCredentialsError
+
 from .benchmarks.evaluator import BenchmarkSuiteResult
 from .benchmarks.reporter import BenchmarkReporter
 from .bootstrap import build_service, ensure_vector_db
+from .cli import _persist_aws_credentials_to_file
 from .credentials import (
     AuthenticationError,
     get_stored_api_key,
     store_api_key,
 )
-from .ingest import ingest_file_to_vector_db
+from .ingest import ingest_bytes_to_vector_db, ingest_file_to_vector_db
 from .llm import is_authentication_error, validate_api_key
 from .logging_config import get_logger
 from .profiles import Profile
 from .rag_service import DEFAULT_SESSION_ID, RagService
 from .s3_service import S3StorageService
-from .settings import get_settings
+from .settings import Settings, get_settings
 
 logger = get_logger(__name__)
 
@@ -108,6 +111,31 @@ class ApiKeyRequest(BaseModel):
     api_key: str = Field(..., min_length=1)
 
 
+class SetupConfigRequest(BaseModel):
+    """Payload for full runtime setup and onboarding configuration."""
+
+    language: str = Field(default="en")
+    llm_provider: str = Field(default="gemini")
+    model: str | None = None
+    api_key: str | None = None
+    use_s3_storage: bool = Field(default=False)
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str | None = None
+    aws_s3_bucket_name: str | None = None
+    app_name: str | None = None
+
+
+class OnboardingConfigRequest(SetupConfigRequest):
+    """Payload to configure assistant during browser onboarding (backwards compatible)."""
+
+
+class AppNameRequest(BaseModel):
+    """Payload to update application display name."""
+
+    app_name: str = Field(..., min_length=1)
+
+
 class ProfileModel(BaseModel):
     """Payload for creating or updating a tenant/domain profile."""
 
@@ -145,7 +173,9 @@ class UploadResponse(BaseModel):
     """Response after successful document upload."""
 
     filename: str
+    storage: str = "local"
     storage_type: str = "local"
+    status: str = "success"
     message: str
     profile_id: str | None = None
 
@@ -274,13 +304,148 @@ async def config(request: Request) -> dict[str, object]:
     """Expose runtime settings and readiness the web UI needs on load."""
     settings = get_settings()
     reason = getattr(request.app.state, "setup_reason", None)
+    ready = getattr(request.app.state, "service", None) is not None
+    setup_required = (not settings.setup_completed) or (not ready) or (reason is not None)
     return {
         "language": settings.language,
         "provider": settings.llm_provider,
-        "ready": getattr(request.app.state, "service", None) is not None,
+        "model": settings.active_model,
+        "app_name": settings.app_name,
+        "use_s3_storage": settings.use_s3_storage,
+        "ready": ready,
         "needs_api_key": reason == "needs_api_key",
         "setup_reason": reason,
+        "setup_required": setup_required,
     }
+
+
+def _format_setup_env_lines(settings: Settings) -> list[str]:
+    """Generate configuration lines for .env file."""
+    lines = [
+        "RAG_SETUP_COMPLETED=true",
+        f"RAG_LANGUAGE={settings.language}",
+        f"RAG_LLM_PROVIDER={settings.llm_provider}",
+        f"RAG_USE_S3_STORAGE={str(settings.use_s3_storage).lower()}",
+    ]
+    model_key = "RAG_GEMINI_MODEL" if settings.uses_gemini else "RAG_OLLAMA_MODEL"
+    lines.append(f"{model_key}={settings.active_model}")
+    if settings.app_name:
+        lines.append(f"RAG_APP_NAME={settings.app_name}")
+    if settings.use_s3_storage:
+        lines.append(f"RAG_AWS_ACCESS_KEY_ID={settings.aws_access_key_id or ''}")
+        lines.append(f"RAG_AWS_REGION={settings.aws_region or ''}")
+        lines.append(f"RAG_AWS_S3_BUCKET_NAME={settings.aws_s3_bucket_name or ''}")
+    return lines
+
+
+def _persist_setup_to_env(settings: Settings, env_path: Path | None = None) -> None:
+    """Write non-sensitive setup configuration to .env for persistence."""
+    target_env = env_path or Path(".env")
+    lines: list[str] = target_env.read_text(encoding="utf-8").splitlines() if target_env.exists() else []
+
+    keys = {
+        "RAG_SETUP_COMPLETED", "RAG_LANGUAGE", "RAG_LLM_PROVIDER",
+        "RAG_GEMINI_MODEL", "RAG_OLLAMA_MODEL", "RAG_USE_S3_STORAGE",
+        "RAG_AWS_ACCESS_KEY_ID", "RAG_AWS_SECRET_ACCESS_KEY",
+        "RAG_AWS_REGION", "RAG_AWS_S3_BUCKET_NAME", "RAG_APP_NAME",
+    }
+    filtered = [ln for ln in lines if not any(ln.startswith(k + "=") for k in keys)]
+    filtered.extend(_format_setup_env_lines(settings))
+    target_env.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+
+
+def _apply_s3_env(payload: SetupConfigRequest) -> None:
+    """Set S3 environment variables if provided."""
+    import os
+
+    mapping = {
+        "RAG_AWS_ACCESS_KEY_ID": payload.aws_access_key_id,
+        "RAG_AWS_SECRET_ACCESS_KEY": payload.aws_secret_access_key,
+        "RAG_AWS_REGION": payload.aws_region,
+        "RAG_AWS_S3_BUCKET_NAME": payload.aws_s3_bucket_name,
+    }
+    for k, v in mapping.items():
+        if v:
+            os.environ[k] = v.strip()
+
+
+def _apply_setup_env(payload: SetupConfigRequest) -> None:
+    """Apply setup configuration values to environment variables."""
+    import os
+
+    if payload.language in ("en", "hu"):
+        os.environ["RAG_LANGUAGE"] = payload.language
+    if payload.llm_provider in ("gemini", "ollama"):
+        os.environ["RAG_LLM_PROVIDER"] = payload.llm_provider
+    if payload.model:
+        model_key = "RAG_GEMINI_MODEL" if payload.llm_provider == "gemini" else "RAG_OLLAMA_MODEL"
+        os.environ[model_key] = payload.model.strip()
+    os.environ["RAG_USE_S3_STORAGE"] = str(payload.use_s3_storage).lower()
+    os.environ["RAG_SETUP_COMPLETED"] = "true"
+    if payload.app_name:
+        os.environ["RAG_APP_NAME"] = payload.app_name.strip()
+    if payload.use_s3_storage:
+        _apply_s3_env(payload)
+
+
+def _apply_setup_credentials(payload: SetupConfigRequest, settings: Settings) -> None:
+    """Store credentials in keyring and AWS credentials file."""
+    if payload.api_key and settings.uses_gemini:
+        if not validate_api_key(payload.api_key, settings):
+            raise HTTPException(
+                status_code=401,
+                detail="The supplied API key was rejected by Google Gemini.",
+            )
+        store_api_key(payload.api_key)
+
+    if payload.use_s3_storage and payload.aws_access_key_id and payload.aws_secret_access_key:
+        _persist_aws_credentials_to_file(
+            payload.aws_access_key_id.strip(), payload.aws_secret_access_key.strip()
+        )
+
+
+@app.post("/config/setup")
+async def configure_setup(
+    payload: SetupConfigRequest, request: Request
+) -> dict[str, Any]:
+    """Persist chosen onboarding settings to .env / keyring and initialize services."""
+    _apply_setup_env(payload)
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    _apply_setup_credentials(payload, settings)
+    _persist_setup_to_env(settings)
+    _build_service_state(request.app)
+
+    return {
+        "status": "ok",
+        "setup_required": False,
+        "ready": getattr(request.app.state, "service", None) is not None,
+        "setup_reason": getattr(request.app.state, "setup_reason", None),
+        "language": settings.language,
+        "provider": settings.llm_provider,
+        "model": settings.active_model,
+        "app_name": settings.app_name,
+        "use_s3_storage": settings.use_s3_storage,
+    }
+
+
+@app.post("/config/onboarding")
+async def apply_onboarding(
+    payload: OnboardingConfigRequest, request: Request
+) -> dict[str, Any]:
+    """Handle first-run browser onboarding wizard setup (alias for /config/setup)."""
+    return await configure_setup(payload, request)
+
+
+@app.post("/config/app-name")
+async def set_app_name(payload: AppNameRequest) -> dict[str, str]:
+    """Update application display name dynamically."""
+    import os
+
+    os.environ["RAG_APP_NAME"] = payload.app_name.strip()
+    get_settings.cache_clear()
+    return {"status": "ok", "app_name": payload.app_name.strip()}
 
 
 @app.post(
@@ -526,7 +691,9 @@ async def _handle_local_upload(
         await run_in_threadpool(ingest_file_to_vector_db, file_path, settings, profile_id)
         return UploadResponse(
             filename=file.filename,
+            storage="local",
             storage_type="local",
+            status="success",
             message="File saved to local storage and indexed successfully.",
             profile_id=profile_id,
         )
@@ -535,38 +702,93 @@ async def _handle_local_upload(
         raise HTTPException(status_code=500, detail=f"Local save failed: {str(e)}")
 
 
+def _resolve_content_type(filename: str | None) -> str:
+    """Resolve MIME type from filename."""
+    if not filename:
+        return "application/octet-stream"
+    suffix = filename.lower().rsplit(".", 1)[-1]
+    if suffix == "pdf":
+        return "application/pdf"
+    if suffix in ("txt", "md"):
+        return "text/plain"
+    return "application/octet-stream"
+
+
+def _get_or_init_s3_service(
+    s3_service: S3StorageService | None, settings: Settings
+) -> S3StorageService:
+    """Get active S3 service or initialize a new one with error handling."""
+    if s3_service is not None and s3_service.enabled:
+        return s3_service
+    try:
+        active_s3 = S3StorageService(settings)
+    except (ValueError, NoCredentialsError) as err:
+        logger.error("AWS credentials missing during S3 upload: %s", err)
+        raise HTTPException(
+            status_code=400,
+            detail="AWS credentials not found or invalid. Please update AWS credentials via the UI Settings.",
+        ) from err
+    except Exception as err:
+        logger.error("Failed to initialize S3 service: %s", err)
+        raise HTTPException(
+            status_code=400,
+            detail=f"S3 storage is not enabled or not configured: {err}. Please update AWS credentials via the UI Settings.",
+        ) from err
+
+    if not active_s3.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="AWS credentials not found or invalid. Please update AWS credentials via the UI Settings.",
+        )
+    return active_s3
+
+
 async def _handle_s3_upload(
     file: UploadFile, s3_service: S3StorageService | None, profile_id: str | None
 ) -> UploadResponse:
-    if not s3_service or not s3_service.enabled:
-        raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
-    content_type = "application/octet-stream"
-    if file.filename:
-        suffix = file.filename.lower().split(".")[-1]
-        if suffix == "pdf":
-            content_type = "application/pdf"
-        elif suffix in ("txt", "md"):
-            content_type = "text/plain"
-
+    settings = get_settings()
+    active_s3 = _get_or_init_s3_service(s3_service, settings)
+    content_type = _resolve_content_type(file.filename)
     file_bytes = await file.read()
     key_prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
     target_key = f"{key_prefix}{file.filename or 'unknown'}"
     try:
         object_key = await run_in_threadpool(
-            s3_service.upload_file,
+            active_s3.upload_file,
             file_bytes,
             target_key,
             content_type,
         )
+        await run_in_threadpool(
+            ingest_bytes_to_vector_db,
+            file_bytes,
+            file.filename or target_key,
+            settings,
+            profile_id,
+        )
         return UploadResponse(
             filename=object_key,
+            storage="s3",
             storage_type="s3",
-            message="File uploaded to S3 successfully.",
+            status="success",
+            message="File uploaded to S3 and indexed successfully.",
             profile_id=profile_id,
         )
+    except NoCredentialsError as e:
+        logger.error("AWS credentials error during upload: %s", e)
+        raise HTTPException(
+            status_code=400,
+            detail="AWS credentials not found or invalid. Please update AWS credentials via the UI Settings.",
+        ) from e
     except Exception as e:
+        if "credentials" in str(e).lower():
+            raise HTTPException(
+                status_code=400,
+                detail="AWS credentials not found or invalid. Please update AWS credentials via the UI Settings.",
+            ) from e
         logger.error("S3 upload failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}") from e
+
 
 
 @app.post("/documents/upload")

@@ -78,21 +78,22 @@ to change it is a `profiles.json` file at the repo root (path configurable via
 
 ## 3. Rebrand the surface text
 
-These strings are user-facing and still mention futures trading. Update them for
-your domain:
+You can rebrand the application either dynamically through the Web UI or in the configuration files:
 
+### Live via the Web UI Settings Modal
+1. Click the **⚙️ Settings** button at the bottom of the left sidebar.
+2. Under **Branding & Identity**, enter your custom **Application Display Name** (e.g. *Acme Legal Intelligence*, *CarePoint Health Assistant*) and click **Update Brand Name**.
+3. The page header, sidebar brand, and browser tab update immediately, and the setting persists across sessions.
+
+### In Code / Config:
 | What | Where |
 | --- | --- |
-| Web UI title, header, subtitle, welcome text, example questions | [`src/static/index.html`](../src/static/index.html) — the `I18N` object (`en` and `hu` blocks) |
-| App icon / favicon | [`src/static/assets/`](../src/static/assets) (replace `icon.png`) |
+| Application Display Name (Default) | `RAG_APP_NAME` in `.env` / `src/settings.py` |
+| Web UI title, subtitle, welcome text, example questions | [`src/static/assets/app.js`](../src/static/assets/app.js) — the `I18N` object (`en` and `hu` blocks) |
+| App icon / favicon | [`src/static/assets/icon.png`](../src/static/assets/icon.png) |
 | Default persona (if not using `profiles.json`) | [`src/prompts.py`](../src/prompts.py) — `DEFAULT_PERSONAS` |
 | Desktop app folder name | [`desktop/backend/entry.py`](../desktop/backend/entry.py) — `APP_DIR_NAME` |
 | CLI banner / catalog text | [`src/i18n.py`](../src/i18n.py) |
-
-In `index.html`, at minimum update `docTitle`, `headerTitle`, `headerSubtitle`,
-`welcomeText`, and the `suggestions` array (the example question chips) in **both**
-the `en` and `hu` dictionaries. Pick example questions your documents can
-actually answer — they set user expectations and double as a smoke test.
 
 ---
 

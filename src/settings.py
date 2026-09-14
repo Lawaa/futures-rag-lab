@@ -32,9 +32,17 @@ class Settings(BaseSettings):
     # --- Embeddings ----------------------------------------------------------
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5")
 
-    # --- Interface language --------------------------------------------------
+    # --- Interface language & branding ---------------------------------------
     # Language used for assistant answers and the user interface (CLI/Web).
     language: Literal["en", "hu"] = Field(default="en")
+    app_name: str = Field(
+        default="Futures Trading Assistant",
+        description="Application or company display name.",
+    )
+    setup_completed: bool = Field(
+        default=False,
+        description="Whether initial onboarding setup has been completed.",
+    )
 
     # --- Language model ------------------------------------------------------
     # Choose the backend: hosted Google Gemini or a local Ollama server.
