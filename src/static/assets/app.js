@@ -393,9 +393,7 @@ const docViewerClose = document.getElementById("docViewerClose") || docInspector
 const docViewerLoading = document.getElementById("docViewerLoading");
 const docViewerContent = document.getElementById("docViewerContent");
 const docViewerIcon = document.getElementById("docViewerIcon");
-const navChatlab = document.getElementById("nav-chatlab");
 const navLegal = document.getElementById("nav-legal");
-const navDocs = document.getElementById("nav-docs");
 const navSettings = document.getElementById("nav-settings");
 const composerDocBtn = document.getElementById("composer-doc-btn");
 const composerPromptBtn = document.getElementById("composer-prompt-btn");
@@ -2602,25 +2600,10 @@ if (btnToggleGraph && docGraphWidget) {
   });
 }
 
-if (navChatlab) {
-  navChatlab.addEventListener("click", () => {
-    document.querySelectorAll(".sidebar-nav-item").forEach(n => n.classList.remove("active"));
-    navChatlab.classList.add("active");
-    inputEl.focus();
-  });
-}
-
 if (navLegal) {
   navLegal.addEventListener("click", () => {
     loadLegalCorpora();
     if (modalLegalCorpus) modalLegalCorpus.classList.add("show");
-  });
-}
-
-if (navDocs) {
-  navDocs.addEventListener("click", () => {
-    loadKbDocs();
-    if (modalKb) modalKb.classList.add("show");
   });
 }
 
