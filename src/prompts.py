@@ -308,3 +308,36 @@ def get_router_prompt() -> ChatPromptTemplate:
             ("human", "{question}"),
         ]
     )
+
+
+# --- Code Review ------------------------------------------------------------
+CODE_REVIEW_SYSTEM_PROMPT = (
+    "You are a senior software architect and code quality evaluator for a high-reliability Python application.\n"
+    "You are provided with a condensed structural AST outline of a Python module along with static analysis "
+    "findings (security, type annotations, exception handling, and cyclomatic complexity).\n\n"
+    "Your task:\n"
+    "1. Evaluate overall architecture, modularity, and adherence to clean Python patterns.\n"
+    "2. Review the reported static analysis issues and provide actionable recommendations.\n"
+    "3. Identify subtle anti-patterns, maintainability risks, or error-prone logic visible in the structure.\n"
+    "4. Deliver concise, prioritized feedback organized into:\n"
+    "   - Summary Assessment (Pass / Needs Refactoring)\n"
+    "   - Critical Risks & Improvements\n"
+    "   - Architectural & Maintainability Recommendations\n\n"
+    "Keep responses compact, actionable, and token-efficient."
+)
+
+
+def get_code_review_prompt() -> ChatPromptTemplate:
+    """Build the prompt for the second-stage LLM code review."""
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", CODE_REVIEW_SYSTEM_PROMPT),
+            (
+                "human",
+                "File: {file_path}\n\n"
+                "Static Analysis Issues:\n{issues}\n\n"
+                "Condensed AST Structural Outline:\n\"\"\"\n{ast_summary}\n\"\"\"\n\n"
+                "Please provide your structured code review:",
+            ),
+        ]
+    )
