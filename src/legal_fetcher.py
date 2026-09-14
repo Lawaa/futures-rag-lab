@@ -32,6 +32,8 @@ LEGAL_CORPORA: dict[str, dict[str, Any]] = {
         "description": "A polgári jog alapvető kódexe: személyek joga, dologi jog, kötelmi jog, szerződések és kártérítés.",
         "filename": "ptk_2013_v.txt",
         "url": "https://njt.jog.gov.hu/jogszabaly/2013-5-00-00",
+        "source": "Nemzeti Jogszabálytár (njt.hu)",
+        "source_url": "https://njt.hu/jogszabaly/2013-5-00-00",
         "doc_id": "2013-5-00-00",
     },
     "btk": {
@@ -40,6 +42,8 @@ LEGAL_CORPORA: dict[str, dict[str, Any]] = {
         "description": "Büntetőjogi rendelkezések: bűncselekmények, gazdasági és pénzügyi visszaélések, büntetések és intézkedések.",
         "filename": "btk_2012_c.txt",
         "url": "https://njt.jog.gov.hu/jogszabaly/2012-100-00-00",
+        "source": "Nemzeti Jogszabálytár (njt.hu)",
+        "source_url": "https://njt.hu/jogszabaly/2012-100-00-00",
         "doc_id": "2012-100-00-00",
     },
 }
@@ -233,6 +237,9 @@ class LegalCorpusManager:
                     "size_bytes": size_bytes,
                     "last_synced": last_synced,
                     "is_active": exists,
+                    "source": info.get("source", "Nemzeti Jogszabálytár (njt.hu)"),
+                    "source_url": info.get("source_url", info["url"]),
+                    "url": info["url"],
                 }
             )
         return results

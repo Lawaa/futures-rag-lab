@@ -147,7 +147,9 @@ class ProfileModel(BaseModel):
 
     id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
+    names: dict[str, str] = Field(default_factory=dict)
     description: str = Field(default="")
+    descriptions: dict[str, str] = Field(default_factory=dict)
     system_prompt: str | None = None
     system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
@@ -644,7 +646,9 @@ async def list_profiles(service: ServiceDep) -> ProfileListResponse:
             ProfileModel(
                 id=p.id,
                 name=p.name,
+                names=p.names,
                 description=p.description,
+                descriptions=p.descriptions,
                 system_prompt=p.system_prompt,
                 system_prompts=p.system_prompts,
                 guardrails=p.guardrails,
@@ -660,7 +664,9 @@ async def create_profile(payload: ProfileModel, service: ServiceDep) -> dict[str
     profile = Profile(
         id=payload.id,
         name=payload.name,
+        names=payload.names,
         description=payload.description,
+        descriptions=payload.descriptions,
         system_prompt=payload.system_prompt,
         system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,
@@ -677,7 +683,9 @@ async def update_profile(
     profile = Profile(
         id=profile_id,
         name=payload.name,
+        names=payload.names,
         description=payload.description,
+        descriptions=payload.descriptions,
         system_prompt=payload.system_prompt,
         system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,

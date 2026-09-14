@@ -78,7 +78,12 @@ const I18N = {
     legalSyncing: "Syncing and indexing legal corpora…",
     legalSuccess: "Legal statutes synced and indexed successfully!",
     btnClose: "Close",
-    btnSyncLegal: "Sync & Index Selected Corpora 🚀",
+    btnSyncLegal: "Sync Selected Statutes from Netjogtár (njt.hu) 🏛️",
+    legalProviderBadge: "Official Source: Nemzeti Jogszabálytár (njt.hu)",
+    legalProviderSub: "Authoritative Hungarian Gazette and Ministry of Justice Corpus",
+    legalLiveSyncLabel: "Netjogtár / NJT Live Sync",
+    legalSourceLabel: "Source: Nemzeti Jogszabálytár (njt.hu)",
+    legalCustomUrlLabel: "Custom Netjogtár URL or Statute Identifier (Optional):",
 
     // Settings Modal
     settingsHeader: "⚙️ System Settings & Customization",
@@ -90,6 +95,15 @@ const I18N = {
     settingsColorTheme: "Color Theme",
     settingsLanguage: "Language",
     settingsBackend: "Backend Architecture",
+    stLlmProvider: "LLM Provider:",
+    stModel: "Model:",
+    stStorage: "Storage:",
+    stRagService: "RAG Service:",
+    storageLocal: "Local Filesystem",
+    storageS3: "Amazon S3 Bucket",
+    statusActiveReady: "Active & Ready",
+    statusNeedsKey: "Needs API Key",
+    statusInit: "Initializing",
     settingsQuickSetup: "Quick Setup & Tools",
     settingsRerunWizard: "🔄 Rerun Onboarding Wizard",
     settingsDevTools: "Developer Tools & Benchmarks",
@@ -112,8 +126,8 @@ const I18N = {
     profDesc: "Description (Router summary)",
     profPrompt: "System Prompt (Persona & Instructions)",
     profGuardrails: "Domain Guardrails",
-    profGuardCitations: "Enforce Citations: Require explicit source document/page references for assertions",
-    profGuardPhi: "Anonymize PII/PHI: Automatically redact SSN, MRN, phone, email, and patient identifiers",
+    profGuardCitations: "<strong>Enforce Citations:</strong> Require explicit source document/page references for assertions",
+    profGuardPhi: "<strong>Anonymize PII/PHI:</strong> Automatically redact SSN, MRN, phone, email, and patient identifiers",
     profBtnNew: "+ New Profile",
     profBtnSave: "Save Profile",
   },
@@ -194,7 +208,12 @@ const I18N = {
     legalSyncing: "Törvénytár szinkronizálása és indexelése…",
     legalSuccess: "A jogszabályok szinkronizálása és indexelése sikeresen befejeződött!",
     btnClose: "Bezárás",
-    btnSyncLegal: "Kijelölt Törvények Szinkronizálása és Indexelése 🚀",
+    btnSyncLegal: "Kijelölt Törvények Szinkronizálása a Netjogtárból 🏛️",
+    legalProviderBadge: "Hivatalos Forrás: Nemzeti Jogszabálytár (njt.hu)",
+    legalProviderSub: "Hiteles Magyar Közlönykiadó és Igazságügyi szövegtár",
+    legalLiveSyncLabel: "Netjogtár / NJT Élő Szinkronizáció",
+    legalSourceLabel: "Forrás: Nemzeti Jogszabálytár (njt.hu)",
+    legalCustomUrlLabel: "Egyéni Netjogtár Hivatkozás vagy Azonosító (opcionális):",
 
     // Settings Modal
     settingsHeader: "⚙️ Rendszerbeállítások és Testreszabás",
@@ -206,6 +225,15 @@ const I18N = {
     settingsColorTheme: "Színtéma",
     settingsLanguage: "Nyelv",
     settingsBackend: "Háttérrendszer Architektúra",
+    stLlmProvider: "LLM Szolgáltató:",
+    stModel: "Modell:",
+    stStorage: "Tároló:",
+    stRagService: "RAG Szolgáltatás:",
+    storageLocal: "Helyi Fájlrendszer",
+    storageS3: "Amazon S3 Felhőtár",
+    statusActiveReady: "Aktiválva és Kész",
+    statusNeedsKey: "API Kulcs Szükséges",
+    statusInit: "Inicializálás",
     settingsQuickSetup: "Gyors Beállítás és Eszközök",
     settingsRerunWizard: "🔄 Bevezető Varázsló Újrafuttatása",
     settingsDevTools: "Fejlesztői Eszközök és Benchmarkok",
@@ -223,15 +251,15 @@ const I18N = {
 
     // Profile Modal
     profModalTitle: "🛡️ Bérlői és Domain Profil",
-    profId: "Profil Azonosító",
-    profName: "Megjelenített Név",
-    profDesc: "Leírás (Útválasztó összegzés)",
-    profPrompt: "Rendszerutasítás (Perszóna és Instrukciók)",
+    profId: "Profil azonosító",
+    profName: "Megjelenítendő név",
+    profDesc: "Leírás (Router összegzés)",
+    profPrompt: "Rendszerutasítás / System Prompt",
     profGuardrails: "Domain Biztonsági Korlátok",
-    profGuardCitations: "Kötelező Hivatkozások: Konkrét forrásdokumentum- és oldalhivatkozások megkövetelése az állításokhoz",
-    profGuardPhi: "Személyes/Egészségügyi Adatok Anonimizálása: TAJ, azonosítók, telefonszám, email automatikus kitakarása",
-    profBtnNew: "+ Új Profil",
-    profBtnSave: "Profil Mentése",
+    profGuardCitations: "<strong>Kötelező Hivatkozások:</strong> Konkrét forrásdokumentum- és oldalhivatkozások megkövetelése az állításokhoz",
+    profGuardPhi: "<strong>Személyes/Egészségügyi Adatok Anonimizálása:</strong> TAJ, azonosítók, telefonszám, email automatikus kitakarása",
+    profBtnNew: "+ Új profil",
+    profBtnSave: "Profil mentése",
   },
 };
 
@@ -426,16 +454,29 @@ function applyLanguage() {
   document.documentElement.lang = LANG;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const key = el.getAttribute("data-i18n");
-    if (typeof T[key] === "string") el.textContent = T[key];
+    if (typeof T[key] === "string") {
+      if (T[key].includes("<") && T[key].includes(">")) {
+        el.innerHTML = T[key];
+      } else {
+        el.textContent = T[key];
+      }
+    }
   });
   if (inputEl) inputEl.placeholder = T.placeholder;
   if (setupKeyEl) setupKeyEl.placeholder = T.setupPlaceholder;
   if (settingLanguage) settingLanguage.value = LANG;
+  const customUrlInput = document.getElementById("legal-custom-url");
+  if (customUrlInput) customUrlInput.placeholder = T.legalCustomUrlPlaceholder || "";
   applyTheme(getSavedTheme());
   renderSuggestions();
   if (legalCorporaData && legalCorporaData.length > 0) {
     renderLegalCorporaList();
   }
+  if (profiles && profiles.length > 0) {
+    renderProfilesDropdown();
+    updateActiveDomainTrigger();
+  }
+  loadBackendStatus();
 }
 
 if (settingLanguage) {
@@ -1151,9 +1192,16 @@ async function loadBackendStatus() {
       if (cfg.app_name) updateAppNameUI(cfg.app_name);
       if (stProvider) stProvider.textContent = cfg.provider || "gemini";
       if (stModel) stModel.textContent = cfg.model || "gemini-2.5-flash";
-      if (stStorage) stStorage.textContent = cfg.use_s3_storage ? "Amazon S3 Bucket" : "Local Filesystem";
+      if (stStorage) {
+        stStorage.textContent = cfg.use_s3_storage 
+          ? (T.storageS3 || "Amazon S3 Bucket") 
+          : (T.storageLocal || "Local Filesystem");
+      }
       if (stReady) {
-        stReady.textContent = cfg.ready ? "Active & Ready" : (cfg.needs_api_key ? "Needs API Key" : "Initializing");
+        const readyText = cfg.ready 
+          ? (T.statusActiveReady || "Active & Ready") 
+          : (cfg.needs_api_key ? (T.statusNeedsKey || "Needs API Key") : (T.statusInit || "Initializing"));
+        stReady.textContent = readyText;
         stReady.className = "status-badge " + (cfg.ready ? "ready" : "not-ready");
       }
     }
@@ -1182,8 +1230,9 @@ function getDomainIcon(profile) {
 function updateActiveDomainTrigger() {
   const p = profiles.find((x) => x.id === currentProfileId) || profiles[0];
   if (!p) return;
+  const pName = (p.names && p.names[LANG]) || p.name || p.id;
   if (domainActiveIcon) domainActiveIcon.textContent = getDomainIcon(p);
-  if (domainActiveName) domainActiveName.textContent = p.name || p.id;
+  if (domainActiveName) domainActiveName.textContent = pName;
   if (profileSelectEl) profileSelectEl.value = p.id;
   updateActiveProfileLabel();
 }
@@ -1228,44 +1277,50 @@ if (domainDropdownTrigger) {
   });
 }
 
+function renderProfilesDropdown() {
+  if (profileSelectEl) profileSelectEl.innerHTML = "";
+  if (domainDropdownMenu) domainDropdownMenu.innerHTML = "";
+
+  for (const p of profiles) {
+    const pName = (p.names && p.names[LANG]) || p.name || p.id;
+    const pDesc = (p.descriptions && p.descriptions[LANG]) || p.description || "";
+    if (profileSelectEl) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = pName;
+      profileSelectEl.appendChild(opt);
+    }
+
+    if (domainDropdownMenu) {
+      const item = document.createElement("div");
+      item.className = "domain-item" + (p.id === currentProfileId ? " active" : "");
+      item.setAttribute("role", "menuitem");
+      item.dataset.profileId = p.id;
+      const icon = getDomainIcon(p);
+      item.innerHTML = `
+        <div class="domain-item-icon">${icon}</div>
+        <div class="domain-item-body">
+          <div class="domain-item-title">${escapeHtml(pName)}</div>
+          <div class="domain-item-desc">${escapeHtml(pDesc)}</div>
+        </div>
+        <div class="domain-item-check">${p.id === currentProfileId ? "✓" : ""}</div>
+      `;
+      item.addEventListener("click", () => {
+        selectProfile(p.id);
+        closeDomainDropdown();
+      });
+      domainDropdownMenu.appendChild(item);
+    }
+  }
+}
+
 async function loadProfiles() {
   try {
     const res = await fetch("/profiles");
     if (res.ok) {
       const data = await res.json();
       profiles = data.profiles || [];
-      if (profileSelectEl) profileSelectEl.innerHTML = "";
-      if (domainDropdownMenu) domainDropdownMenu.innerHTML = "";
-
-      for (const p of profiles) {
-        if (profileSelectEl) {
-          const opt = document.createElement("option");
-          opt.value = p.id;
-          opt.textContent = p.name || p.id;
-          profileSelectEl.appendChild(opt);
-        }
-
-        if (domainDropdownMenu) {
-          const item = document.createElement("div");
-          item.className = "domain-item" + (p.id === currentProfileId ? " active" : "");
-          item.setAttribute("role", "menuitem");
-          item.dataset.profileId = p.id;
-          const icon = getDomainIcon(p);
-          item.innerHTML = `
-            <div class="domain-item-icon">${icon}</div>
-            <div class="domain-item-body">
-              <div class="domain-item-title">${escapeHtml(p.name || p.id)}</div>
-              <div class="domain-item-desc">${escapeHtml(p.description || "")}</div>
-            </div>
-            <div class="domain-item-check">${p.id === currentProfileId ? "✓" : ""}</div>
-          `;
-          item.addEventListener("click", () => {
-            selectProfile(p.id);
-            closeDomainDropdown();
-          });
-          domainDropdownMenu.appendChild(item);
-        }
-      }
+      renderProfilesDropdown();
 
       if (!profiles.some((p) => p.id === currentProfileId) && profiles.length > 0) {
         currentProfileId = profiles[0].id;
@@ -1278,7 +1333,7 @@ async function loadProfiles() {
 function updateActiveProfileLabel() {
   const p = profiles.find((x) => x.id === currentProfileId);
   if (kbActiveProfileEl) {
-    kbActiveProfileEl.textContent = p ? p.name : currentProfileId;
+    kbActiveProfileEl.textContent = p ? ((p.names && p.names[LANG]) || p.name) : currentProfileId;
   }
 }
 
@@ -1293,9 +1348,9 @@ btnProfileConfig.addEventListener("click", () => {
   if (p) {
     profIdEl.value = p.id;
     profIdEl.disabled = true;
-    profNameEl.value = p.name || "";
-    profDescEl.value = p.description || "";
-    profPromptEl.value = p.system_prompt || "";
+    profNameEl.value = (p.names && p.names[LANG]) || p.name || "";
+    profDescEl.value = (p.descriptions && p.descriptions[LANG]) || p.description || "";
+    profPromptEl.value = (p.system_prompts && p.system_prompts[LANG]) || p.system_prompt || "";
     const guards = p.guardrails || {};
     profGuardCitationsEl.checked = Boolean(guards.enforce_citations);
     profGuardPhiEl.checked = Boolean(guards.anonymize_phi);
@@ -1688,6 +1743,8 @@ function renderLegalCorporaList() {
 
     const sizeStr = c.size_bytes > 0 ? (c.size_bytes / 1024).toFixed(1) + " KB" : (T.legalRemote || "Remote");
     const dateStr = c.last_synced ? new Date(c.last_synced).toLocaleString(LANG === "hu" ? "hu-HU" : "en-US") : (T.legalNotSynced || "Not synced yet");
+    const sourceLabel = c.source || (T.legalSourceLabel || (LANG === "hu" ? "Forrás: Nemzeti Jogszabálytár (njt.hu)" : "Source: Nemzeti Jogszabálytár (njt.hu)"));
+    const sourceUrl = c.source_url || c.url || "https://njt.hu";
 
     item.innerHTML = `
       <input type="checkbox" value="${escapeHtml(c.id)}" ${c.is_active || c.status === "cached" ? "checked" : ""} />
@@ -1700,6 +1757,8 @@ function renderLegalCorporaList() {
         <div class="legal-corpus-meta">
           <span>📦 ${sizeStr}</span>
           <span>🕒 ${dateStr}</span>
+          <span class="legal-source-tag">🏛️ ${escapeHtml(sourceLabel)}</span>
+          <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="legal-source-link" onclick="event.stopPropagation()">🌐 njt.hu</a>
         </div>
       </div>
     `;
@@ -1727,7 +1786,10 @@ async function syncLegalCorpora() {
   const checkboxes = legalCorporaList.querySelectorAll("input[type='checkbox']:checked");
   const activeCorpora = Array.from(checkboxes).map((cb) => cb.value);
 
-  if (activeCorpora.length === 0) {
+  const customUrlInput = document.getElementById("legal-custom-url");
+  const customUrl = customUrlInput ? customUrlInput.value.trim() : "";
+
+  if (activeCorpora.length === 0 && !customUrl) {
     if (legalSyncProgressContainer) legalSyncProgressContainer.style.display = "block";
     if (legalSyncStatus) {
       legalSyncStatus.textContent = T.legalSelectStatute || "Please select at least one legal statute to index.";

@@ -2,7 +2,15 @@
   {
     "id": "default",
     "name": "General Futures Assistant",
+    "names": {
+      "en": "General Futures Assistant",
+      "hu": "Általános Kereskedési Asszisztens"
+    },
     "description": "General trading knowledge base covering contracts, margins, settlement, and market mechanisms.",
+    "descriptions": {
+      "en": "General trading knowledge base covering contracts, margins, settlement, and market mechanisms.",
+      "hu": "Általános kereskedési ismeretek, határidős szerződések, letétek, elszámolás és piaci mechanizmusok."
+    },
     "system_prompt": "You are an expert Futures Trading Assistant.",
     "guardrails": {
       "enforce_citations": false,
@@ -12,7 +20,15 @@
   {
     "id": "legal",
     "name": "Legal & Regulatory Compliance",
+    "names": {
+      "en": "Legal & Regulatory Compliance",
+      "hu": "Jogi és Megfelelőségi Szakértő"
+    },
     "description": "Regulatory compliance, statutory codes (Ptk., Btk.), contracts, liability, and governance.",
+    "descriptions": {
+      "en": "Regulatory compliance, statutory codes (Ptk., Btk.), contracts, liability, and governance.",
+      "hu": "Magyar polgári és büntető jogszabályok, törvénykönyvek (Ptk., Btk.), megfelelőségi ellenőrzések és jogi kötelezettségek."
+    },
     "system_prompt": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
     "system_prompts": {
       "en": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
@@ -26,7 +42,15 @@
   {
     "id": "healthcare",
     "name": "Clinical Healthcare Advisor",
+    "names": {
+      "en": "Clinical Healthcare Advisor",
+      "hu": "Klinikai Egészségügyi Tanácsadó"
+    },
     "description": "Medical policies, clinical procedures, patient privacy, and healthcare administration guidelines.",
+    "descriptions": {
+      "en": "Medical policies, clinical procedures, patient privacy, and healthcare administration guidelines.",
+      "hu": "Egészségügyi irányelvek, klinikai eljárások, betegadatok védelme és orvosi szabályozás."
+    },
     "system_prompt": "You are an expert Clinical Healthcare Assistant and medical policy advisor. Deliver clear, evidence-based clinical guidance while strictly observing medical protocol rigor and patient privacy boundaries.",
     "guardrails": {
       "enforce_citations": true,
@@ -36,7 +60,15 @@
   {
     "id": "finance",
     "name": "Quantitative Financial Analyst",
+    "names": {
+      "en": "Quantitative Financial Analyst",
+      "hu": "Kvantitatív Pénzügyi Elemző"
+    },
     "description": "Derivatives pricing, volatility surfaces, Greeks modeling, hedging algorithms, and risk analytics.",
+    "descriptions": {
+      "en": "Derivatives pricing, volatility surfaces, Greeks modeling, hedging algorithms, and risk analytics.",
+      "hu": "Derivatív árazás, volatilitási modellek, görögök (Greeks), fedezeti stratégiák és kockázatelemzés."
+    },
     "system_prompt": "You are an expert Quantitative Financial Analyst and Risk Strategist. Formulate structured quantitative breakdowns, stress-test calculations, and precision hedge strategies.",
     "guardrails": {
       "enforce_citations": false,

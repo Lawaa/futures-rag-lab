@@ -38,10 +38,24 @@ class Profile(BaseModel):
 
     id: str
     name: str
+    names: dict[str, str] = Field(default_factory=dict)
     description: str = ""
+    descriptions: dict[str, str] = Field(default_factory=dict)
     system_prompt: str | None = None
     system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
+
+    def get_name(self, language: str = "en") -> str:
+        """Return language-specific name or fall back to default name."""
+        if self.names and language in self.names:
+            return self.names[language]
+        return self.name
+
+    def get_description(self, language: str = "en") -> str:
+        """Return language-specific description or fall back to default description."""
+        if self.descriptions and language in self.descriptions:
+            return self.descriptions[language]
+        return self.description
 
     def get_system_prompt(self, language: str = "en") -> str | None:
         """Return language-specific system prompt or fall back to default system_prompt."""
@@ -113,7 +127,15 @@ def _builtin_default() -> Profile:
     return Profile(
         id=DEFAULT_PROFILE_ID,
         name="General Futures Assistant",
+        names={
+            "en": "General Futures Assistant",
+            "hu": "Általános Kereskedési Asszisztens",
+        },
         description="General knowledge base built from the loaded documents.",
+        descriptions={
+            "en": "General knowledge base built from the loaded documents.",
+            "hu": "Általános tudásbázis a betöltött dokumentumok alapján.",
+        },
         system_prompt="You are an expert Futures Trading Assistant.",
         system_prompts={},
         guardrails={"enforce_citations": False, "anonymize_phi": False},
@@ -133,7 +155,9 @@ def _parse_profiles(raw: object) -> list[Profile]:
             Profile(
                 id=profile_id,
                 name=str(entry.get("name", profile_id)),
+                names=entry.get("names") or {},
                 description=str(entry.get("description", "")),
+                descriptions=entry.get("descriptions") or {},
                 system_prompt=entry.get("system_prompt"),
                 system_prompts=entry.get("system_prompts") or {},
                 guardrails=entry.get("guardrails") or {},

@@ -308,19 +308,19 @@
           <h4 class="settings-section-title" data-i18n="settingsBackend">Backend Architecture</h4>
           <div class="status-card" id="backend-status-card">
             <div class="status-row">
-              <span class="status-label">LLM Provider:</span>
+              <span class="status-label" data-i18n="stLlmProvider">LLM Provider:</span>
               <span class="status-val" id="st-provider">-</span>
             </div>
             <div class="status-row">
-              <span class="status-label">Model:</span>
+              <span class="status-label" data-i18n="stModel">Model:</span>
               <span class="status-val" id="st-model">-</span>
             </div>
             <div class="status-row">
-              <span class="status-label">Storage:</span>
+              <span class="status-label" data-i18n="stStorage">Storage:</span>
               <span class="status-val" id="st-storage">-</span>
             </div>
             <div class="status-row">
-              <span class="status-label">RAG Service:</span>
+              <span class="status-label" data-i18n="stRagService">RAG Service:</span>
               <span class="status-badge" id="st-ready">-</span>
             </div>
           </div>
@@ -352,40 +352,40 @@
   <div class="modal-overlay" id="modal-profile">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>🛡️ Tenant &amp; Domain Profile</h3>
+        <h3 data-i18n="profModalTitle">🛡️ Tenant &amp; Domain Profile</h3>
         <button class="modal-close" id="prof-close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="prof-id">Profile ID</label>
+          <label for="prof-id" data-i18n="profId">Profile ID</label>
           <input type="text" id="prof-id" placeholder="e.g. legal, healthcare" />
         </div>
         <div class="form-group">
-          <label for="prof-name">Display Name</label>
+          <label for="prof-name" data-i18n="profName">Display Name</label>
           <input type="text" id="prof-name" placeholder="e.g. Legal &amp; Compliance Advisor" />
         </div>
         <div class="form-group">
-          <label for="prof-desc">Description (Router summary)</label>
+          <label for="prof-desc" data-i18n="profDesc">Description (Router summary)</label>
           <input type="text" id="prof-desc" placeholder="Summary of domain scope..." />
         </div>
         <div class="form-group">
-          <label for="prof-prompt">System Prompt (Persona &amp; Instructions)</label>
+          <label for="prof-prompt" data-i18n="profPrompt">System Prompt (Persona &amp; Instructions)</label>
           <textarea id="prof-prompt" rows="4" placeholder="You are an expert advisor in..."></textarea>
         </div>
         <div class="form-group">
-          <label>Domain Guardrails</label>
+          <label data-i18n="profGuardrails">Domain Guardrails</label>
           <div class="checkbox-row">
             <input type="checkbox" id="prof-guard-citations" />
-            <label for="prof-guard-citations"><strong>Enforce Citations:</strong> Require explicit source document/page references for assertions</label>
+            <label for="prof-guard-citations" data-i18n="profGuardCitations"><strong>Enforce Citations:</strong> Require explicit source document/page references for assertions</label>
           </div>
           <div class="checkbox-row">
             <input type="checkbox" id="prof-guard-phi" />
-            <label for="prof-guard-phi"><strong>Anonymize PII/PHI:</strong> Automatically redact SSN, MRN, phone, email, and patient identifiers</label>
+            <label for="prof-guard-phi" data-i18n="profGuardPhi"><strong>Anonymize PII/PHI:</strong> Automatically redact SSN, MRN, phone, email, and patient identifiers</label>
           </div>
         </div>
         <div class="modal-actions">
-          <button id="prof-create-new" class="btn-secondary">+ New Profile</button>
-          <button id="prof-save" class="btn-primary">Save Profile</button>
+          <button id="prof-create-new" class="btn-secondary" data-i18n="profBtnNew">+ New Profile</button>
+          <button id="prof-save" class="btn-primary" data-i18n="profBtnSave">Save Profile</button>
         </div>
         <div id="prof-status" class="status-msg"></div>
       </div>
@@ -483,6 +483,29 @@
         <p class="legal-corpus-intro" data-i18n="legalModalIntro">
           Select the official legal statutes to cache and index into the <strong>Legal &amp; Regulatory Compliance</strong> domain vector store. Cached statutes are checked conditionally via HTTP <code>ETag</code> to prevent redundant re-downloads.
         </p>
+
+        <div class="legal-source-banner">
+          <div class="legal-source-badge">
+            <span class="source-icon">🏛️</span>
+            <div>
+              <strong data-i18n="legalProviderBadge">Hivatalos Forrás: Nemzeti Jogszabálytár (njt.hu)</strong>
+              <div class="source-sub" data-i18n="legalProviderSub">Hiteles Magyar Közlönykiadó és Igazságügyi szövegtár</div>
+            </div>
+          </div>
+          <div class="legal-live-sync-option">
+            <label class="switch-row" for="legal-live-sync-toggle">
+              <input type="checkbox" id="legal-live-sync-toggle" checked />
+              <span data-i18n="legalLiveSyncLabel">Netjogtár / NJT Élő Szinkronizáció</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="legal-custom-source-row" id="legalCustomSourceRow">
+          <label for="legal-custom-url" class="legal-custom-label" data-i18n="legalCustomUrlLabel">Egyéni Netjogtár Hivatkozás vagy Azonosító (opcionális):</label>
+          <div class="legal-custom-input-group">
+            <input type="text" id="legal-custom-url" placeholder="pl. https://njt.hu/jogszabaly/2013-5-00-00 vagy törvény azonosító" class="legal-custom-input" />
+          </div>
+        </div>
 
         <div class="legal-corpora-list" id="legalCorporaList">
           <div class="text-muted" style="padding: 12px 0;" data-i18n="kbLoading">Loading legal corpora availability…</div>
