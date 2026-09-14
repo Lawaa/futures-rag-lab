@@ -22,7 +22,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.vectorstores import VectorStoreRetriever
 
 from .conversation_store import ConversationStore
-from .graph import STAGE_LABELS, RetrievalGraph
+from .graph import STAGE_LABELS, RetrievalGraph, _filter_legal_documents
 from .guardrails import apply_guardrails_to_inputs, apply_guardrails_to_outputs
 from .models import Answer, RetrievalResult, Source
 from .profiles import Profile, ProfileRegistry, load_profiles
@@ -44,25 +44,6 @@ DEFAULT_SESSION_ID = "default_session"
 
 def _format_context(documents: list[Document]) -> str:
     return "\n\n".join(document.page_content for document in documents)
-
-
-def _filter_legal_documents(docs: list[Document], query: str) -> list[Document]:
-    """Filter or prioritize legal documents based on query intent."""
-    if not docs:
-        return docs
-    q = query.lower()
-    is_ptk = bool(re.search(r"\b(ptk|polgári|polgari|szerz[oöő]d|kötelmi|tulajdon|öröklés)\b", q))
-    is_btk = bool(re.search(r"\b(btk|b[uüű]ntet[oöő]|b[uüű]ncselekm[eé]ny|szabadságvesztés)\b", q))
-
-    if is_ptk and not is_btk:
-        ptk_docs = [d for d in docs if "ptk" in d.metadata.get("source", "").lower()]
-        if ptk_docs:
-            return ptk_docs
-    elif is_btk and not is_ptk:
-        btk_docs = [d for d in docs if "btk" in d.metadata.get("source", "").lower()]
-        if btk_docs:
-            return btk_docs
-    return docs
 
 
 class RagService:
@@ -202,17 +183,18 @@ class RagService:
         and — when self-correction is enabled — grades them and rewrites the query
         until relevant results are found or the retry budget is exhausted.
         """
+        pid = profile_id or self._profiles.active_id
         history = self._history(session_id)
         prior_docs = self._session_documents.get(session_id, [])
         state = self._retrieval_graph.run(
             question,
             history.messages,
             session_id,
-            profile_id=profile_id,
+            profile_id=pid,
             prior_documents=prior_docs,
         )
         docs = state.get("documents", [])
-        active_pid = state.get("profile_id") or profile_id or self._profiles.active_id
+        active_pid = state.get("profile_id") or pid
         if active_pid == "legal":
             docs = _filter_legal_documents(docs, question)
         if docs:

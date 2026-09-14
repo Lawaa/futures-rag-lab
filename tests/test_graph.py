@@ -254,3 +254,51 @@ def test_legal_hu_profile_bypasses_translation_to_english() -> None:
     assert retriever.queries == ["polgári törvénykönyv szerződéskötés"]
 
 
+def test_legal_profile_isolated_native_hungarian_retrieval_with_english_settings() -> None:
+    """Verify that legal profile bypasses English query translation even when system language is 'en'."""
+    class LangAwareFake(RoutingFakeChatModel):
+        def _route(self, messages: list[BaseMessage]) -> str:
+            system = messages[0].content.lower() if messages else ""
+            if "query preparation assistant" in system:
+                if "written in hungarian" in system:
+                    return "kártérítési felelősség feltételei"
+                return "conditions of liability for damages"
+            return super()._route(messages)
+
+    retriever = RecordingRetriever([[_doc("6:142. § [Kártérítési felelősség]")]])
+    llm = LangAwareFake(grade_response="yes")
+    settings = Settings(language="en", retrieval_language="en")
+    graph = RetrievalGraph(llm, retriever, settings)
+
+    state = graph.run("Ptk. 6:142. § szerinti kártérítés", [], profile_id="legal")
+
+    # Statutory section clause (§) is preserved in native Hungarian search query
+    assert "6:142. §" in state["search_query"]
+    assert "kártérítési felelősség feltételei" in state["search_query"]
+    assert "conditions of liability" not in state["search_query"]
+    assert retriever.queries == [state["search_query"]]
+
+
+def test_non_legal_profile_maintains_standard_english_translation() -> None:
+    """Verify that non-legal profiles (e.g. futures/trading) keep standard English translation pipeline."""
+    class LangAwareFake(RoutingFakeChatModel):
+        def _route(self, messages: list[BaseMessage]) -> str:
+            system = messages[0].content.lower() if messages else ""
+            if "query preparation assistant" in system:
+                if "written in english" in system:
+                    return "futures margin requirement"
+                return "határidős letéti követelmény"
+            return super()._route(messages)
+
+    retriever = RecordingRetriever([[_doc("margin doc")]])
+    llm = LangAwareFake(grade_response="yes")
+    settings = Settings(language="en", retrieval_language="en")
+    graph = RetrievalGraph(llm, retriever, settings)
+
+    state = graph.run("Mekkora a határidős letét?", [], profile_id="trading")
+
+    assert state["search_query"] == "futures margin requirement"
+    assert retriever.queries == ["futures margin requirement"]
+
+
+

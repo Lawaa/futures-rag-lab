@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+import re
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from langchain_core.documents import Document
@@ -135,6 +136,26 @@ def _format_prior_context_summary(documents: list[Document], max_chars: int = 60
     return summary[:max_chars]
 
 
+def _build_contextual_question(
+    question: str, prior_docs: list[Document], history: list[BaseMessage]
+) -> str:
+    """Combine prior turn context with the latest question if prior docs and history exist."""
+    if not (prior_docs and history):
+        return question
+    prior_summary = _format_prior_context_summary(prior_docs)
+    if not prior_summary:
+        return question
+    return f"[Context from prior turn:\n{prior_summary}]\n\n{question}"
+
+
+def _ensure_statutory_clause(query_text: str, question: str) -> str:
+    """Preserve exact statutory section clause (§) terms in search queries for exact text matching."""
+    match = SECTION_REGEX.search(question)
+    if match and match.group(1) not in query_text:
+        return f"{match.group(1)} {query_text}"
+    return query_text
+
+
 def _clean_query(text: str) -> str:
     """Strip whitespace and surrounding quotes the model may add to a query."""
     return text.strip().strip('"').strip("'").strip()
@@ -142,6 +163,61 @@ def _clean_query(text: str) -> str:
 
 def _format_context(documents: list[Document]) -> str:
     return "\n\n".join(document.page_content for document in documents)
+
+
+SECTION_REGEX = re.compile(r"(\b\d+:\d+\.?\s*§|\b\d+\.?\s*§)")
+
+
+def _filter_legal_documents(docs: list[Document], query: str) -> list[Document]:
+    """Filter or prioritize legal documents based on query intent.
+
+    When a legal query explicitly targets 'Polgári Törvénykönyv' / 'Ptk.',
+    boosts ptk_2013_v.txt chunks to eliminate unrelated criminal law (Btk.) false positives.
+    """
+    if not docs:
+        return docs
+    q = query.lower()
+    is_ptk = bool(
+        re.search(
+            r"\b(ptk|polgári\s*törvénykönyv|polgari\s*torvenykonyv|polgári|polgari|szerz[oöő]d|kötelmi|tulajdon|öröklés)\b",
+            q,
+        )
+    )
+    is_btk = bool(
+        re.search(
+            r"\b(btk|büntető\s*törvénykönyv|bunteto\s*torvenykonyv|b[uüű]ntet[oöő]|b[uüű]ncselekm[eé]ny|szabadságvesztés)\b",
+            q,
+        )
+    )
+
+    def _is_ptk(doc: Document) -> bool:
+        src = doc.metadata.get("source", "").lower()
+        return "ptk" in src
+
+    def _is_btk(doc: Document) -> bool:
+        src = doc.metadata.get("source", "").lower()
+        return "btk" in src
+
+    if is_ptk and not is_btk:
+        ptk_docs = [d for d in docs if _is_ptk(d)]
+        if ptk_docs:
+            return ptk_docs
+        non_btk = [d for d in docs if not _is_btk(d)]
+        if non_btk:
+            return non_btk
+    elif is_btk and not is_ptk:
+        btk_docs = [d for d in docs if _is_btk(d)]
+        if btk_docs:
+            return btk_docs
+        non_ptk = [d for d in docs if not _is_ptk(d)]
+        if non_ptk:
+            return non_ptk
+    else:
+        # Boost Ptk as default baseline civil code
+        ptk_docs = [d for d in docs if _is_ptk(d)]
+        other_docs = [d for d in docs if not _is_ptk(d)]
+        return ptk_docs + other_docs
+    return docs
 
 
 def _doc_key(document: Document) -> tuple:
@@ -251,9 +327,27 @@ class RetrievalGraph:
         logger.info("Routed question to profile '%s'.", profile.id)
         return {"profile_id": profile.id}
 
+    def _resolve_profile_id(self, state: RetrievalState) -> str | None:
+        """Resolve active profile id from state or profile registry."""
+        if state.get("profile_id"):
+            return state["profile_id"]
+        if self._profiles:
+            return self._profiles.active_id
+        return None
+
+    def _resolve_retriever(self, profile_id: str | None) -> VectorStoreRetriever:
+        """Fetch profile-specific retriever from factory, or return default."""
+        if profile_id and self._retriever_factory and callable(self._retriever_factory):
+            return self._retriever_factory(profile_id)
+        return self._retriever
+
+    def _is_legal_profile(self, profile_id: str | None) -> bool:
+        """Check if active profile is Legal (requires isolated Hungarian retrieval)."""
+        return bool(profile_id == "legal")
+
     def _is_legal_hu_profile(self, profile_id: str | None) -> bool:
-        """Check if active profile is Legal with Hungarian language setting."""
-        return bool(profile_id == "legal" and self._settings.language == "hu")
+        """Backward-compatible alias for legal profile check."""
+        return self._is_legal_profile(profile_id)
 
     def _prepare_query(self, state: RetrievalState) -> dict:
         """Resolve references and translate the question into the corpus language."""
@@ -261,23 +355,19 @@ class RetrievalGraph:
         history = state.get("chat_history") or []
         prior_docs = state.get("prior_documents") or state.get("documents") or []
         is_quote = _is_quote_followup(question) and bool(prior_docs)
+        pid = self._resolve_profile_id(state)
 
-        query_question = question
-        if prior_docs and history:
-            prior_summary = _format_prior_context_summary(prior_docs)
-            if prior_summary:
-                query_question = f"[Context from prior turn:\n{prior_summary}]\n\n{question}"
-
-        chain = (
-            self._search_hu_chain
-            if self._is_legal_hu_profile(state.get("profile_id"))
-            else self._search_chain
-        )
+        query_question = _build_contextual_question(question, prior_docs, history)
+        is_legal = self._is_legal_profile(pid)
+        chain = self._search_hu_chain if is_legal else self._search_chain
         query = chain.invoke(
             {"question": query_question, "chat_history": history}
         )
+        cleaned = _clean_query(query) or question
+        if is_legal:
+            cleaned = _ensure_statutory_clause(cleaned, question)
         return {
-            "search_query": _clean_query(query) or question,
+            "search_query": cleaned,
             "retry_count": 0,
             "prior_documents": prior_docs,
             "is_quote_followup": is_quote,
@@ -315,15 +405,14 @@ class RetrievalGraph:
             )
             return {"documents": prior_docs}
 
-        retriever = self._retriever
-        profile_id = state.get("profile_id")
-        if profile_id and self._retriever_factory and callable(self._retriever_factory):
-            retriever = self._retriever_factory(profile_id)
-
+        profile_id = self._resolve_profile_id(state)
+        retriever = self._resolve_retriever(profile_id)
         documents = self._retrieve_candidates(retriever, state)
         if not documents and prior_docs:
             logger.info("Search returned 0 documents on follow-up; falling back to prior turn documents.")
             documents = prior_docs
+        if self._is_legal_profile(profile_id):
+            documents = _filter_legal_documents(documents, state.get("question", ""))
         return {"documents": documents}
 
     def _grade(self, state: RetrievalState) -> dict:
@@ -342,18 +431,19 @@ class RetrievalGraph:
 
     def _rewrite_query(self, state: RetrievalState) -> dict:
         """Reformulate a failed search query and count the retry."""
-        chain = (
-            self._rewrite_hu_chain
-            if self._is_legal_hu_profile(state.get("profile_id"))
-            else self._rewrite_chain
-        )
+        pid = self._resolve_profile_id(state)
+        is_legal = self._is_legal_profile(pid)
+        chain = self._rewrite_hu_chain if is_legal else self._rewrite_chain
         rewritten = chain.invoke(
             {"question": state["question"], "query": state["search_query"]}
         )
         retry_count = state.get("retry_count", 0) + 1
         logger.info("Rewriting search query (attempt %d).", retry_count)
+        cleaned_rewrite = _clean_query(rewritten) or state["search_query"]
+        if is_legal:
+            cleaned_rewrite = _ensure_statutory_clause(cleaned_rewrite, state["question"])
         return {
-            "search_query": _clean_query(rewritten) or state["search_query"],
+            "search_query": cleaned_rewrite,
             "retry_count": retry_count,
         }
 

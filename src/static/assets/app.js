@@ -666,6 +666,15 @@ function renderWelcome() {
   welcome.className = "welcome";
   welcome.id = "welcome";
 
+  const logoWrap = document.createElement("div");
+  logoWrap.className = "welcome-logo-wrap";
+  const logo = document.createElement("img");
+  logo.src = "/static/logo.png";
+  logo.alt = "Platform Logo";
+  logo.className = "welcome-logo hover:scale-105";
+  logo.id = "welcome-logo";
+  logoWrap.appendChild(logo);
+
   const badge = document.createElement("div");
   badge.className = "welcome-badge";
   badge.textContent = "✦ AI Knowledge Platform";
@@ -680,7 +689,7 @@ function renderWelcome() {
   sug.className = "suggestions-grid";
   sug.id = "suggestions";
 
-  welcome.append(badge, h2, p, sug);
+  welcome.append(logoWrap, badge, h2, p, sug);
   messagesEl.appendChild(welcome);
   renderSuggestions();
   if (activeConvTitleEl) {

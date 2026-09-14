@@ -555,6 +555,13 @@ def test_sync_legal_corpora_endpoint(monkeypatch) -> None:
     mock_mgr.sync_selected_corpora.assert_called_once_with(["ptk"])
 
 
+def test_static_logo_served_correctly() -> None:
+    res = client.get("/static/logo.png")
+    assert res.status_code == 200
+    assert "image/png" in res.headers.get("content-type", "")
+
+
+
 
 
 

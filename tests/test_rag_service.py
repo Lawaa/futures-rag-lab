@@ -259,4 +259,43 @@ def test_reset_history_clears_session_documents() -> None:
     assert len(service._session_documents["sess-clear"]) == 1
 
     service.reset_history("sess-clear")
-    assert "sess-clear" not in service._session_documents
+    assert "sess-clear" not in service._session_documents
+
+
+def test_filter_legal_documents_boosts_ptk_and_filters_btk_false_positives() -> None:
+    from src.rag_service import _filter_legal_documents
+
+    ptk_doc = Document(
+        page_content="6:142. § [Kártérítési felelősség szerződésszegésért]",
+        metadata={"source": "ptk_2013_v.txt"},
+    )
+    btk_doc = Document(
+        page_content="370. § [Lopás] Aki idegen dolgot mástól jogtalan eltulajdonítás végett elvesz",
+        metadata={"source": "btk_2012_c.txt"},
+    )
+    docs = [btk_doc, ptk_doc]
+
+    # Query explicitly targeting Polgári Törvénykönyv / Ptk
+    filtered = _filter_legal_documents(docs, "Milyen felelősséget határoz meg a Polgári Törvénykönyv (Ptk.)?")
+    assert len(filtered) == 1
+    assert filtered[0].metadata["source"] == "ptk_2013_v.txt"
+    assert "btk" not in filtered[0].metadata["source"]
+
+
+def test_filter_legal_documents_isolates_btk_for_criminal_query() -> None:
+    from src.rag_service import _filter_legal_documents
+
+    ptk_doc = Document(
+        page_content="6:142. § [Kártérítési felelősség szerződésszegésért]",
+        metadata={"source": "ptk_2013_v.txt"},
+    )
+    btk_doc = Document(
+        page_content="370. § [Lopás] Aki idegen dolgot mástól jogtalan eltulajdonítás végett elvesz",
+        metadata={"source": "btk_2012_c.txt"},
+    )
+    docs = [ptk_doc, btk_doc]
+
+    filtered = _filter_legal_documents(docs, "Büntető Törvénykönyv Btk. szerinti büntetés lopásért")
+    assert len(filtered) == 1
+    assert filtered[0].metadata["source"] == "btk_2012_c.txt"
+

@@ -266,6 +266,7 @@ app.state.setup_reason = None
 
 # Serve the app icon and other static assets used by the web UI.
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
