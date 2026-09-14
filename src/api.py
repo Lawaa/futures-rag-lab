@@ -66,6 +66,8 @@ class SourceModel(BaseModel):
 
     name: str
     page: int | None = None
+    snippet: str | None = None
+
 
 
 class ChatResponse(BaseModel):
@@ -501,7 +503,7 @@ async def chat(payload: ChatRequest, service: ServiceDep) -> ChatResponse:
 
     return ChatResponse(
         answer=answer.text,
-        sources=[SourceModel(name=s.name, page=s.page) for s in answer.sources],
+        sources=[SourceModel(name=s.name, page=s.page, snippet=getattr(s, "snippet", None)) for s in answer.sources],
         grounded=answer.grounded,
     )
 
@@ -921,8 +923,40 @@ async def delete_document(
     raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
 
 
-async def _handle_s3_download(
-    s3_service: S3ServiceDep, filename: str, profile_id: str | None
+def _resolve_document_media_type(filename: str) -> str:
+    """Resolve accurate MIME media type for document viewing and streaming."""
+    suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if suffix == "pdf":
+        return "application/pdf"
+    if suffix == "md":
+        return "text/markdown; charset=utf-8"
+    if suffix == "txt":
+        return "text/plain; charset=utf-8"
+    return "application/octet-stream"
+
+
+def _find_local_file(settings: Settings, filename: str, profile_id: str | None = None) -> Path | None:
+    """Find a local document file in the profile directory or root data directory."""
+    target_dir = _resolve_data_dir(settings, profile_id)
+    file_path = target_dir / filename
+    if file_path.exists() and file_path.is_file():
+        return file_path
+
+    root_file = settings.data_path / filename
+    if root_file.exists() and root_file.is_file():
+        return root_file
+
+    for match in settings.data_path.rglob(filename):
+        if match.is_file():
+            return match
+    return None
+
+
+async def _handle_s3_fetch(
+    s3_service: S3ServiceDep,
+    filename: str,
+    profile_id: str | None,
+    disposition: str = "attachment",
 ) -> StreamingResponse:
     if not s3_service or not s3_service.enabled:
         raise HTTPException(status_code=400, detail="S3 storage is not enabled or not configured.")
@@ -930,52 +964,114 @@ async def _handle_s3_download(
     target_key = f"{key_prefix}{filename}"
     try:
         stream = await run_in_threadpool(s3_service.get_file_stream, target_key)
-        content_type = "application/pdf" if filename.lower().endswith(".pdf") else "text/plain"
+        media_type = _resolve_document_media_type(filename)
         return StreamingResponse(
             stream,
-            media_type=content_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            media_type=media_type,
+            headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File '{filename}' not found in S3.")
     except Exception as e:
-        logger.error("S3 download failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"S3 download failed: {str(e)}")
+        logger.error("S3 fetch failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"S3 fetch failed: {str(e)}")
 
 
-def _handle_local_download(
-    settings: Settings, filename: str, profile_id: str | None
+def _handle_local_fetch(
+    settings: Settings,
+    filename: str,
+    profile_id: str | None,
+    disposition: str = "attachment",
 ) -> FileResponse:
-    target_dir = _resolve_data_dir(settings, profile_id)
-    file_path = target_dir / filename
-    if not file_path.exists():
+    file_path = _find_local_file(settings, filename, profile_id)
+    if not file_path:
         raise HTTPException(status_code=404, detail=f"File '{filename}' not found locally.")
 
+    media_type = _resolve_document_media_type(filename)
     return FileResponse(
         file_path,
         filename=filename,
-        media_type="application/octet-stream",
+        media_type=media_type,
+        content_disposition_type=disposition,
     )
 
 
-@app.get("/documents/{filename}/download", response_model=None)
-async def download_document(
+@app.get("/documents/{filename}/view", response_model=None)
+async def view_document(
     filename: str,
     storage_type: str | None = None,
     profile_id: str | None = None,
     s3_service: S3ServiceDep = None,
 ) -> StreamingResponse | FileResponse:
+    """View raw document content inline for preview with accurate MIME types."""
+    settings = get_settings()
+    backend = storage_type or ("s3" if settings.use_s3_storage else "local")
+    if backend == "s3":
+        return await _handle_s3_fetch(s3_service, filename, profile_id, disposition="inline")
+    if backend == "local":
+        return _handle_local_fetch(settings, filename, profile_id, disposition="inline")
+    raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+@app.get("/documents/{filename}/download", response_model=None)
+async def download_document(
+    filename: str,
+    request: Request,
+    storage_type: str | None = None,
+    profile_id: str | None = None,
+    inline: bool = False,
+    s3_service: S3ServiceDep = None,
+) -> StreamingResponse | FileResponse:
     """Download a document from storage for a given profile."""
     settings = get_settings()
     backend = storage_type or ("s3" if settings.use_s3_storage else "local")
-
+    disposition = (
+        "inline"
+        if (inline or request.headers.get("sec-fetch-dest") == "iframe")
+        else "attachment"
+    )
     if backend == "s3":
-        return await _handle_s3_download(s3_service, filename, profile_id)
-
+        return await _handle_s3_fetch(s3_service, filename, profile_id, disposition=disposition)
     if backend == "local":
-        return _handle_local_download(settings, filename, profile_id)
-
+        return _handle_local_fetch(settings, filename, profile_id, disposition=disposition)
     raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
+
+
+class BenchmarkRunRequest(BaseModel):
+    """Optional parameters for benchmark evaluation."""
+
+    models: list[str] | None = None
+    top_k: int = 5
+    num_samples: int = 5
+
+
+@app.post("/benchmarks/run")
+async def run_benchmarks(
+    payload: BenchmarkRunRequest | None = None,
+) -> dict[str, Any]:
+    """Execute embedding model benchmark evaluation and update reports."""
+    from .benchmarks.cli import main as run_benchmark_cli
+
+    models = payload.models if (payload and payload.models) else None
+    top_k = payload.top_k if payload else 5
+    num_samples = payload.num_samples if payload else 5
+
+    cli_args: list[str] = ["--top-k", str(top_k), "--num-samples", str(num_samples)]
+    if models:
+        cli_args.extend(["--models", *models])
+
+    try:
+        exit_code = await run_in_threadpool(run_benchmark_cli, cli_args)
+        if exit_code != 0:
+            raise HTTPException(status_code=500, detail="Benchmark evaluation failed during execution.")
+        return {
+            "status": "success",
+            "message": "Benchmark evaluation completed successfully and report updated.",
+        }
+    except Exception as e:
+        logger.error("Benchmark run failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Benchmark run error: {str(e)}")
+
 
 
 # --- Benchmark Reports Endpoint ---------------------------------------------

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
@@ -74,9 +74,65 @@ class RetrievalState(TypedDict, total=False):
     search_query: str
     search_queries: list[str]
     documents: list[Document]
+    prior_documents: list[Document]
+    is_quote_followup: bool
     relevant: bool
     retry_count: int
     profile_id: str
+
+
+_QUOTE_KEYWORDS: tuple[str, ...] = (
+    "quote",
+    "exact text",
+    "exact sentence",
+    "exact words",
+    "citation",
+    "cite",
+    "which document",
+    "which file",
+    "what document",
+    "where did you find",
+    "where does it say",
+    "source",
+    "sources",
+    "verify",
+    "excerpt",
+    "passage",
+    "used above",
+    "mentioned above",
+    "stated above",
+    "referenced above",
+    "fenti",
+    "idézd",
+    "idézet",
+    "pontos szöveg",
+    "pontos mondat",
+    "forrás",
+    "hivatkozás",
+    "hol írja",
+    "melyik dokumentum",
+)
+
+
+def _is_quote_followup(question: str) -> bool:
+    """Check if question asks to quote, cite or verify previously referenced text."""
+    q_lower = question.lower()
+    return any(kw in q_lower for kw in _QUOTE_KEYWORDS)
+
+
+def _format_prior_context_summary(documents: list[Document], max_chars: int = 600) -> str:
+    """Format snippet from prior turn retrieved documents for query preparation."""
+    if not documents:
+        return ""
+    snippets: list[str] = []
+    for d in documents[:3]:
+        src = d.metadata.get("source", "doc") if d.metadata else "doc"
+        content = d.page_content.strip().replace("\n", " ")
+        if len(content) > 180:
+            content = content[:180] + "..."
+        snippets.append(f"[{src}]: {content}")
+    summary = "\n".join(snippets)
+    return summary[:max_chars]
 
 
 def _clean_query(text: str) -> str:
@@ -191,10 +247,24 @@ class RetrievalGraph:
         """Resolve references and translate the question into the corpus language."""
         question = state["question"]
         history = state.get("chat_history") or []
+        prior_docs = state.get("prior_documents") or state.get("documents") or []
+        is_quote = _is_quote_followup(question) and bool(prior_docs)
+
+        query_question = question
+        if prior_docs and history:
+            prior_summary = _format_prior_context_summary(prior_docs)
+            if prior_summary:
+                query_question = f"[Context from prior turn:\n{prior_summary}]\n\n{question}"
+
         query = self._search_chain.invoke(
-            {"question": question, "chat_history": history}
+            {"question": query_question, "chat_history": history}
         )
-        return {"search_query": _clean_query(query) or question, "retry_count": 0}
+        return {
+            "search_query": _clean_query(query) or question,
+            "retry_count": 0,
+            "prior_documents": prior_docs,
+            "is_quote_followup": is_quote,
+        }
 
     def _expand_queries(self, state: RetrievalState) -> dict:
         """Fan the prepared query out into several complementary variants."""
@@ -207,24 +277,42 @@ class RetrievalGraph:
         logger.info("Expanded search into %d query variants.", len(queries))
         return {"search_queries": queries}
 
+    def _retrieve_candidates(
+        self, retriever: VectorStoreRetriever, state: RetrievalState
+    ) -> list[Document]:
+        queries = state.get("search_queries") if self._multi_query else None
+        if queries:
+            with ThreadPoolExecutor(max_workers=min(len(queries), 8)) as executor:
+                ranked_lists = list(executor.map(retriever.invoke, queries))
+            return _reciprocal_rank_fusion(ranked_lists, self._top_k)
+        return retriever.invoke(state["search_query"])
+
     def _retrieve(self, state: RetrievalState) -> dict:
         """Fetch candidate documents for the current query (or fused variants)."""
+        prior_docs = state.get("prior_documents") or []
+        if state.get("is_quote_followup") and prior_docs:
+            logger.info(
+                "Retaining %d prior turn documents for quote/citation follow-up.",
+                len(prior_docs),
+            )
+            return {"documents": prior_docs}
+
         retriever = self._retriever
         profile_id = state.get("profile_id")
         if profile_id and self._retriever_factory and callable(self._retriever_factory):
             retriever = self._retriever_factory(profile_id)
 
-        queries = state.get("search_queries") if self._multi_query else None
-        if queries:
-            with ThreadPoolExecutor(max_workers=min(len(queries), 8)) as executor:
-                ranked_lists = list(executor.map(retriever.invoke, queries))
-            documents = _reciprocal_rank_fusion(ranked_lists, self._top_k)
-            return {"documents": documents}
-        documents = retriever.invoke(state["search_query"])
+        documents = self._retrieve_candidates(retriever, state)
+        if not documents and prior_docs:
+            logger.info("Search returned 0 documents on follow-up; falling back to prior turn documents.")
+            documents = prior_docs
         return {"documents": documents}
 
     def _grade(self, state: RetrievalState) -> dict:
         """Judge whether the retrieved documents can support an answer."""
+        if state.get("is_quote_followup") and state.get("documents"):
+            return {"relevant": True}
+
         documents = state.get("documents") or []
         if not documents:
             return {"relevant": False}
@@ -257,7 +345,7 @@ class RetrievalGraph:
         return "accept"
 
     # -- assembly -------------------------------------------------------------
-    def _build(self):
+    def _build(self) -> Any:
         builder = StateGraph(RetrievalState)
         builder.add_node("prepare_query", self._prepare_query)
         builder.add_node("retrieve", self._retrieve)
@@ -305,9 +393,12 @@ class RetrievalGraph:
         chat_history: list[BaseMessage] | None = None,
         session_id: str = DEFAULT_THREAD_ID,
         profile_id: str | None = None,
+        prior_documents: list[Document] | None = None,
     ) -> RetrievalState:
         """Execute the graph and return the final state for a single turn."""
         inputs: dict = {"question": question, "chat_history": chat_history or []}
+        if prior_documents:
+            inputs["prior_documents"] = prior_documents
         if profile_id:
             inputs["profile_id"] = profile_id
         return self._graph.invoke(
@@ -321,9 +412,12 @@ class RetrievalGraph:
         chat_history: list[BaseMessage] | None = None,
         session_id: str = DEFAULT_THREAD_ID,
         profile_id: str | None = None,
+        prior_documents: list[Document] | None = None,
     ) -> Iterator[tuple[str, RetrievalState]]:
         """Yield ``(node_name, state_update)`` pairs as each stage completes."""
         inputs: dict = {"question": question, "chat_history": chat_history or []}
+        if prior_documents:
+            inputs["prior_documents"] = prior_documents
         if profile_id:
             inputs["profile_id"] = profile_id
         for update in self._graph.stream(

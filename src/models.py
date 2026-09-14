@@ -14,6 +14,7 @@ class Source:
 
     name: str
     page: int | None = None
+    snippet: str | None = None
 
     def __str__(self) -> str:
         page_str = f" (Page {self.page})" if self.page is not None else ""
@@ -27,7 +28,8 @@ class Source:
         page = document.metadata.get("page")
         # Page metadata is zero-indexed; present it one-indexed to users.
         page_number = page + 1 if isinstance(page, int) else None
-        return cls(name=name, page=page_number)
+        snippet = document.page_content.strip() if document.page_content else None
+        return cls(name=name, page=page_number, snippet=snippet)
 
 
 @dataclass(frozen=True)
@@ -44,10 +46,14 @@ class RetrievalResult:
     @property
     def sources(self) -> list[Source]:
         """Deduplicated, ordered list of sources for the retrieved documents."""
-        seen: dict[Source, None] = {}
+        seen: dict[tuple[str, int | None], Source] = {}
         for document in self.documents:
-            seen.setdefault(Source.from_document(document), None)
-        return list(seen)
+            src = Source.from_document(document)
+            key = (src.name, src.page)
+            if key not in seen:
+                seen[key] = src
+        return list(seen.values())
+
 
 
 @dataclass(frozen=True)

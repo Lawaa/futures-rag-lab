@@ -22,6 +22,9 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with **`uv`
 - **Profiles / Multi-Tenant Routing (optional):** Serve several businesses from one app — each profile has its own system prompt, and questions can be auto-routed to the best-matching profile (`RAG_ENABLE_PROFILE_ROUTING`)
 - **Live Pipeline Progress:** The web UI streams each retrieval stage (routing → preparing → retrieving → grading → answering) so users see what the assistant is doing
 - **Durable, Resumable State:** The retrieval graph persists per-conversation state via a LangGraph SQLite checkpointer (`RAG_ENABLE_CHECKPOINTING`, default on)
+- **Multi-Turn Context & Citation Retention:** Solves Self-RAG follow-up quote/citation loss; follow-up questions asking to "quote the exact text used above" or verify citations retain the prior turn's candidate documents and grounded citations without triggering outside-knowledge fallback disclaimers.
+- **Interactive Document Viewer Modal:** Full-width modal (`max-w-6xl` / `w-[90vw]`) with auto-fitting horizontal view (`FitH`), zoom controls, and native pagination toolbar for PDFs, plus in-document keyword & sentence highlighting for `.md` and `.txt` documents.
+- **Custom Floating Domain Selector:** Sleek ChatGPT/Grok-inspired floating persona dropdown (`#domainDropdownMenu`) with theme-aware hover transitions (`hover:bg-slate-800/80` in dark mode, `hover:bg-slate-100` in light mode) and distinct active checkmark badges.
 - **Contextual Memory & Query Rewriting:** Reformulates ambiguous follow-up questions using chat history
 - **Rate-Limit Friendly:** One LLM instance is shared across every graph step, generation never triggers a second retrieval pass, and an optional client-side throttle (`RAG_LLM_REQUESTS_PER_MINUTE`) keeps you under provider quotas
 - **Persistent Conversations:** Remembers your last 15 conversations - resume any of them or delete old ones from the web UI sidebar (stored locally in SQLite)

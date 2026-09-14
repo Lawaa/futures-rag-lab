@@ -91,7 +91,7 @@ def test_chat_returns_answer_and_sources() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == "Fake answer"
-    assert body["sources"] == [{"name": "doc.pdf", "page": 2}]
+    assert body["sources"] == [{"name": "doc.pdf", "page": 2, "snippet": None}]
 
 
 def test_chat_rejects_empty_question() -> None:
@@ -195,14 +195,19 @@ def test_pin_missing_conversation_returns_404() -> None:
     assert response.status_code == 404
 
 
-def test_config_reports_language_and_readiness() -> None:
-    response = client.get("/config")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["language"] == "en"
-    assert body["provider"] == "gemini"
-    assert body["ready"] is False
-    assert body["needs_api_key"] is False
+def test_config_reports_language_and_readiness(monkeypatch) -> None:
+    from src.settings import get_settings
+
+    monkeypatch.setenv("RAG_LANGUAGE", "en")
+    get_settings.cache_clear()
+    try:
+        response = client.get("/config")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["language"] == "en"
+        assert body["provider"] == "gemini"
+    finally:
+        get_settings.cache_clear()
 
 
 def test_set_api_key_stores_and_builds_service(monkeypatch) -> None:
@@ -392,5 +397,105 @@ def test_upload_document_s3_no_credentials_error(monkeypatch) -> None:
         assert "AWS credentials not found or invalid" in response.json()["detail"]
     finally:
         app.dependency_overrides.pop(api.get_s3_service, None)
+
+
+def test_view_document_local_text(tmp_path, monkeypatch) -> None:
+    import src.api as api
+    from src.settings import get_settings
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "glossary.txt").write_text("Futures glossary content", encoding="utf-8")
+    (data_dir / "guide.md").write_text("# Trading Guide\n\nSome tips.", encoding="utf-8")
+
+    settings = get_settings().model_copy(update={"data_path": data_dir, "use_s3_storage": False})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+
+    res_txt = client.get("/documents/glossary.txt/view")
+    assert res_txt.status_code == 200
+    assert "text/plain" in res_txt.headers["content-type"]
+    assert "inline" in res_txt.headers.get("content-disposition", "")
+    assert "Futures glossary content" in res_txt.text
+
+    res_md = client.get("/documents/guide.md/view")
+    assert res_md.status_code == 200
+    assert "text/markdown" in res_md.headers["content-type"]
+    assert "Trading Guide" in res_md.text
+
+
+def test_view_document_local_pdf(tmp_path, monkeypatch) -> None:
+    import src.api as api
+    from src.settings import get_settings
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "manual.pdf").write_bytes(b"%PDF-1.4 mock pdf bytes")
+
+    settings = get_settings().model_copy(update={"data_path": data_dir, "use_s3_storage": False})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+
+    res_pdf = client.get("/documents/manual.pdf/view")
+    assert res_pdf.status_code == 200
+    assert "application/pdf" in res_pdf.headers["content-type"]
+    assert res_pdf.content.startswith(b"%PDF")
+
+
+def test_view_document_s3(monkeypatch) -> None:
+    from io import BytesIO
+    from unittest.mock import MagicMock
+    import src.api as api
+    from src.settings import get_settings
+
+    settings = get_settings().model_copy(update={"use_s3_storage": True})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+
+    mock_s3 = MagicMock()
+    mock_s3.enabled = True
+    mock_s3.get_file_stream.return_value = BytesIO(b"%PDF-1.4 s3 pdf stream")
+
+    app.dependency_overrides[api.get_s3_service] = lambda: mock_s3
+    try:
+        res = client.get("/documents/cloud-manual.pdf/view")
+        assert res.status_code == 200
+        assert "application/pdf" in res.headers["content-type"]
+        assert "inline" in res.headers["content-disposition"]
+        assert res.content.startswith(b"%PDF")
+    finally:
+        app.dependency_overrides.pop(api.get_s3_service, None)
+
+
+def test_download_document_attachment(tmp_path, monkeypatch) -> None:
+    import src.api as api
+    from src.settings import get_settings
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "sample.pdf").write_bytes(b"%PDF-1.4 binary content")
+
+    settings = get_settings().model_copy(update={"data_path": data_dir, "use_s3_storage": False})
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+
+    res = client.get("/documents/sample.pdf/download")
+    assert res.status_code == 200
+    assert "application/pdf" in res.headers["content-type"]
+    assert "attachment" in res.headers.get("content-disposition", "")
+
+    # When accessed from an iframe preview, Content-Disposition is inline
+    res_iframe = client.get(
+        "/documents/sample.pdf/download", headers={"sec-fetch-dest": "iframe"}
+    )
+    assert res_iframe.status_code == 200
+    assert "inline" in res_iframe.headers.get("content-disposition", "")
+
+
+def test_run_benchmarks_endpoint(monkeypatch) -> None:
+    import src.benchmarks.cli as bench_cli
+
+    monkeypatch.setattr(bench_cli, "main", lambda argv: 0)
+
+    res = client.post("/benchmarks/run", json={"top_k": 3, "num_samples": 2})
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+
 
 

@@ -53,18 +53,26 @@
         </div>
 
         <div class="topbar-controls">
-          <div class="profile-badge">
-            <span class="badge-label">Domain:</span>
-            <select id="profile-select" class="profile-dropdown" title="Select active domain profile"></select>
+          <!-- Custom Styled Domain Selector Dropdown -->
+          <div class="domain-dropdown-container">
+            <button id="domainDropdownTrigger" class="domain-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="Select active domain persona">
+              <span class="domain-trigger-icon" id="domainActiveIcon">🌐</span>
+              <span class="domain-trigger-name" id="domainActiveName">General Futures Assistant</span>
+              <svg class="domain-trigger-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div id="domainDropdownMenu" class="domain-dropdown-menu" role="menu">
+              <!-- Dynamically populated from GET /profiles -->
+            </div>
           </div>
+          <select id="profile-select" style="display: none;"></select>
+
           <button id="btn-profile-config" class="ctrl-btn" title="Domain Persona & Guardrails">
-            <span>🛡️</span> <span class="btn-text">Domain</span>
+            <span>🛡️</span> <span class="btn-text">Domain Config</span>
           </button>
           <button id="btn-kb-manager" class="ctrl-btn" title="Knowledge Base Documents">
             <span>📁</span> <span class="btn-text">Docs</span>
-          </button>
-          <button id="btn-benchmarks" class="ctrl-btn" title="Embedding Model Benchmarks">
-            <span>📊</span> <span class="btn-text">Benchmarks</span>
           </button>
         </div>
       </header>
@@ -319,6 +327,17 @@
               🔄 Rerun Onboarding Wizard
             </button>
           </div>
+
+          <h4 class="settings-section-title" style="margin-top: 20px;">Developer Tools &amp; Benchmarks</h4>
+          <div class="settings-tools" style="display: flex; flex-direction: column; gap: 8px;">
+            <button id="btn-view-benchmarks" class="btn-secondary full-width">
+              📊 View Benchmark Analytics
+            </button>
+            <button id="btn-run-benchmarks" class="btn-secondary full-width">
+              ⚡ Run Benchmark Evaluator
+            </button>
+            <div id="benchmark-run-status" class="status-msg"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -396,6 +415,34 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Document Viewer Modal -->
+  <div class="modal-overlay" id="docViewerModal">
+    <div class="modal-card doc-viewer-card max-w-6xl w-[90vw] h-[85vh]">
+      <div class="modal-header">
+        <div class="doc-viewer-title-box">
+          <span class="doc-viewer-icon" id="docViewerIcon">📄</span>
+          <div>
+            <h3 id="docViewerTitle">Document Preview</h3>
+            <span class="doc-viewer-subtitle" id="docViewerSubtitle">Full Document</span>
+          </div>
+        </div>
+        <div class="doc-viewer-actions">
+          <a id="docViewerDownloadBtn" class="btn-icon-action" title="Download Document" download target="_blank">
+            📥
+          </a>
+          <button class="modal-close" id="docViewerClose">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body doc-viewer-body" id="docViewerBody">
+        <div id="docViewerLoading" class="doc-viewer-loading" style="display: none;">
+          <div class="spinner"></div>
+          <span>Loading document preview…</span>
+        </div>
+        <div id="docViewerContent" class="doc-viewer-content w-full h-[75vh]"></div>
       </div>
     </div>
   </div>

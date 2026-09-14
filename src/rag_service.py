@@ -11,7 +11,7 @@ never triggers a second retrieval pass.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.documents import Document
@@ -22,7 +22,7 @@ from langchain_core.vectorstores import VectorStoreRetriever
 from .conversation_store import ConversationStore
 from .graph import STAGE_LABELS, RetrievalGraph
 from .guardrails import apply_guardrails_to_inputs, apply_guardrails_to_outputs
-from .models import Answer, RetrievalResult
+from .models import Answer, RetrievalResult, Source
 from .profiles import Profile, ProfileRegistry, load_profiles
 from .prompts import (
     get_groundedness_prompt,
@@ -60,6 +60,7 @@ class RagService:
         self._settings = settings
         self._store = store
         self._histories: dict[str, InMemoryChatMessageHistory] = {}
+        self._session_documents: dict[str, list[Document]] = {}
         self._profiles: ProfileRegistry = load_profiles(settings)
         self._retrievers: dict[str, VectorStoreRetriever] = {"default": retriever}
         self._retrieval_graph = RetrievalGraph(
@@ -96,7 +97,7 @@ class RagService:
         self._profiles.save_to_disk(self._settings.profiles_path)
         self._answer_chains.pop(profile.id, None)
 
-    def _answer_chain(self, profile_id: str | None):
+    def _answer_chain(self, profile_id: str | None) -> Any:
         """Return the cached answer chain for a profile (built on first use)."""
         profile = self._profiles.get(profile_id)
         chain = self._answer_chains.get(profile.id)
@@ -129,6 +130,7 @@ class RagService:
     def reset_history(self, session_id: str = DEFAULT_SESSION_ID) -> None:
         """Clear a conversation's history from memory and persistent storage."""
         self._histories.pop(session_id, None)
+        self._session_documents.pop(session_id, None)
         self._retrieval_graph.delete_thread(session_id)
         if self._store is not None:
             self._store.delete_conversation(session_id)
@@ -179,12 +181,20 @@ class RagService:
         until relevant results are found or the retry budget is exhausted.
         """
         history = self._history(session_id)
+        prior_docs = self._session_documents.get(session_id, [])
         state = self._retrieval_graph.run(
-            question, history.messages, session_id, profile_id=profile_id
+            question,
+            history.messages,
+            session_id,
+            profile_id=profile_id,
+            prior_documents=prior_docs,
         )
+        docs = state.get("documents", [])
+        if docs:
+            self._session_documents[session_id] = list(docs)
         return RetrievalResult(
             standalone_question=state.get("search_query", question),
-            documents=state.get("documents", []),
+            documents=docs,
             retry_count=state.get("retry_count", 0),
             profile_id=state.get("profile_id") or profile_id or self._profiles.active_id,
         )
@@ -193,9 +203,10 @@ class RagService:
     def _answer_inputs(
         self, question: str, retrieval: RetrievalResult, session_id: str
     ) -> dict:
+        docs = retrieval.documents or self._session_documents.get(session_id, [])
         return {
             "question": question,
-            "context": _format_context(retrieval.documents),
+            "context": _format_context(docs),
             "chat_history": self._history(session_id).messages,
         }
 
@@ -207,31 +218,58 @@ class RagService:
             self._store.append_turn(session_id, question, answer)
 
     # -- groundedness (Self-RAG / CRAG) --------------------------------------
-    def _is_grounded(self, retrieval: RetrievalResult, text: str) -> bool:
-        """Whether the answer is supported by the retrieved documents.
+    def _candidate_grounding_docs(
+        self, retrieval: RetrievalResult, session_id: str
+    ) -> list[Document]:
+        """Combine current turn retrieved documents with prior turn context."""
+        docs = list(retrieval.documents)
+        prior_docs = self._session_documents.get(session_id, [])
+        if not prior_docs:
+            return docs
+        existing = {d.page_content for d in docs}
+        for d in prior_docs:
+            if d.page_content not in existing:
+                docs.append(d)
+        return docs
 
-        The model is instructed to prepend a disclaimer when it falls back to
-        general knowledge, which is a free, deterministic signal. When enabled,
-        an extra Self-RAG check verifies answers that carry no disclaimer, to
-        catch silent hallucinations.
-        """
-        if not retrieval.documents:
-            return False
-        if is_outside_knowledge(text):
+    def _get_fallback_sources(self, session_id: str) -> list[Source]:
+        """Extract deduplicated sources from previous turn documents if available."""
+        docs = self._session_documents.get(session_id, [])
+        seen: dict[tuple[str, int | None], Source] = {}
+        for doc in docs:
+            src = Source.from_document(doc)
+            key = (src.name, src.page)
+            if key not in seen:
+                seen[key] = src
+        return list(seen.values())
+
+    def _is_grounded(
+        self,
+        retrieval: RetrievalResult,
+        text: str,
+        session_id: str = DEFAULT_SESSION_ID,
+    ) -> bool:
+        """Whether the answer is supported by the retrieved documents or prior turn context."""
+        docs = self._candidate_grounding_docs(retrieval, session_id)
+        if not docs or is_outside_knowledge(text):
             return False
         if not self._groundedness_check:
             return True
         verdict = self._groundedness_chain.invoke(
-            {"context": _format_context(retrieval.documents), "answer": text}
+            {"context": _format_context(docs), "answer": text}
         )
         return is_affirmative(verdict)
 
     def _finalize(
-        self, retrieval: RetrievalResult, text: str
+        self,
+        retrieval: RetrievalResult,
+        text: str,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[str, list, bool]:
         """Apply groundedness: label ungrounded answers and drop false sources."""
-        if self._is_grounded(retrieval, text):
-            return text, retrieval.sources, True
+        if self._is_grounded(retrieval, text, session_id=session_id):
+            sources = retrieval.sources or self._get_fallback_sources(session_id)
+            return text, sources, True
         if not is_outside_knowledge(text):
             note = outside_knowledge_note(self._settings.language)
             text = f"{note}\n\n{text}"
@@ -252,7 +290,9 @@ class RagService:
             self._answer_inputs(clean_q, retrieval, session_id)
         )
         sanitized_raw = apply_guardrails_to_outputs(raw, profile.guardrails)
-        text, sources, grounded = self._finalize(retrieval, sanitized_raw)
+        text, sources, grounded = self._finalize(
+            retrieval, sanitized_raw, session_id=session_id
+        )
         self._remember(session_id, question, text)
         return Answer(text=text, sources=sources, grounded=grounded)
 
@@ -296,18 +336,27 @@ class RagService:
         clean_q = apply_guardrails_to_inputs(question, profile.guardrails)
 
         history = self._history(session_id)
+        prior_docs = self._session_documents.get(session_id, [])
         final_state: dict = {}
         for node_name, node_state in self._retrieval_graph.stream(
-            clean_q, history.messages, session_id, profile_id=profile.id
+            clean_q,
+            history.messages,
+            session_id,
+            profile_id=profile.id,
+            prior_documents=prior_docs,
         ):
             final_state.update(node_state)
             stage = STAGE_LABELS.get(node_name)
             if stage is not None:
                 yield {"type": "status", "stage": stage}
 
+        retrieved_docs = final_state.get("documents", [])
+        if retrieved_docs:
+            self._session_documents[session_id] = list(retrieved_docs)
+
         retrieval = RetrievalResult(
             standalone_question=final_state.get("search_query", clean_q),
-            documents=final_state.get("documents", []),
+            documents=retrieved_docs,
             retry_count=final_state.get("retry_count", 0),
             profile_id=final_state.get("profile_id") or profile.id,
         )
@@ -322,7 +371,9 @@ class RagService:
         raw = "".join(chunks)
 
         sanitized_raw = apply_guardrails_to_outputs(raw, profile.guardrails)
-        text, sources, grounded = self._finalize(retrieval, sanitized_raw)
+        text, sources, grounded = self._finalize(
+            retrieval, sanitized_raw, session_id=session_id
+        )
         # When _finalize prepends an "outside knowledge" note to a silent
         # hallucination, surface just that note so the UI can show it above the
         # already-streamed answer body.
@@ -334,6 +385,6 @@ class RagService:
         yield {
             "type": "done",
             "grounded": grounded,
-            "sources": [{"name": s.name, "page": s.page} for s in sources],
+            "sources": [{"name": s.name, "page": s.page, "snippet": getattr(s, "snippet", None)} for s in sources],
             "note": note,
         }

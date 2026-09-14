@@ -218,7 +218,27 @@ patient-facing `system_prompt`, and medical example questions.
 
 ---
 
-## 8. Repurposing checklist
+## 8. UI & Interaction Enhancements
+
+### 8.1 Custom Floating Domain Selector
+The top navigation bar features a custom, floating persona menu (`#domainDropdownMenu`):
+- **Grok/ChatGPT Styling:** Styled with glassmorphism backdrop blur and soft borders (`border border-slate-700/50`).
+- **Interactive Hover Effects:**
+  - Dark Mode: `hover:bg-slate-800/80 hover:border-slate-700` with subtle title color transitions (`#60a5fa`).
+  - Light Mode: `hover:bg-slate-100 hover:border-slate-300` with clear cursor styling (`cursor: pointer`).
+- **Active State:** The active domain persona maintains an accent border (`border-left: 3px solid var(--accent)`) and checkmark badge (`✓`) even when hovering over other options.
+
+### 8.2 Interactive Document Viewer Modal
+When users click on any source citation chip (`[document.pdf (Page X)]`):
+- **PDF Viewing:** Opens in a wide preview modal (`max-w-6xl`, `w-[90vw]`, `h-[85vh]`). The embedded PDF viewer auto-fits to the horizontal width and activates navigation tools via `#page=${pageNumber}&view=FitH&toolbar=1`.
+- **Markdown & Text Viewing:** Renders formatted content with sentence and phrase matches highlighted using `<mark class="bg-yellow-400/40">`, auto-centering the viewport on the cited text.
+
+### 8.3 Multi-Turn Quote Context Retention
+When users ask follow-up questions asking to *"quote the exact text used above"* or verify statements from the preceding turn, the assistant automatically retains candidate document chunks from that turn. This prevents false empty retrieval results and preserves grounded source citations without triggering outside-knowledge fallbacks.
+
+---
+
+## 9. Repurposing checklist
 
 - [ ] Replaced the documents in `data/`
 - [ ] Wrote `profiles.json` with a domain-appropriate `system_prompt`

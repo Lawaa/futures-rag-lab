@@ -146,11 +146,15 @@ const obStatus = document.getElementById("ob-status");
 let profiles = [];
 let currentProfileId = "default";
 const profileSelectEl = document.getElementById("profile-select");
+const domainDropdownTrigger = document.getElementById("domainDropdownTrigger");
+const domainActiveIcon = document.getElementById("domainActiveIcon");
+const domainActiveName = document.getElementById("domainActiveName");
+const domainDropdownMenu = document.getElementById("domainDropdownMenu");
 const btnProfileConfig = document.getElementById("btn-profile-config");
 const btnKbManager = document.getElementById("btn-kb-manager");
 const btnBenchmarks = document.getElementById("btn-benchmarks");
 
-// Modals: Profile, KB, Benchmarks
+// Modals: Profile, KB, Benchmarks, DocViewer
 const modalProfile = document.getElementById("modal-profile");
 const profClose = document.getElementById("prof-close");
 const profIdEl = document.getElementById("prof-id");
@@ -175,6 +179,18 @@ const modalBenchmarks = document.getElementById("modal-benchmarks");
 const bmClose = document.getElementById("bm-close");
 const bmSummaryChips = document.getElementById("bm-summary-chips");
 const bmReportContent = document.getElementById("bm-report-content");
+const btnViewBenchmarks = document.getElementById("btn-view-benchmarks");
+const btnRunBenchmarks = document.getElementById("btn-run-benchmarks");
+const benchmarkRunStatus = document.getElementById("benchmark-run-status");
+
+const docViewerModal = document.getElementById("docViewerModal");
+const docViewerTitle = document.getElementById("docViewerTitle");
+const docViewerSubtitle = document.getElementById("docViewerSubtitle");
+const docViewerDownloadBtn = document.getElementById("docViewerDownloadBtn");
+const docViewerClose = document.getElementById("docViewerClose");
+const docViewerLoading = document.getElementById("docViewerLoading");
+const docViewerContent = document.getElementById("docViewerContent");
+const docViewerIcon = document.getElementById("docViewerIcon");
 
 const setupOverlay = document.getElementById("setup-overlay");
 const setupKeyEl = document.getElementById("setup-key");
@@ -317,6 +333,15 @@ function renderInline(s) {
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
   s = s.replace(/(^|[^_\w])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
+  s = s.replace(
+    /\[([a-zA-Z0-9_\-.\s]+\.(?:pdf|txt|md))(?:\s*\(p\.\s*(\d+)\))?\]/gi,
+    (m, doc, page) => {
+      const pageArg = page ? Number(page) : "null";
+      const icon = doc.toLowerCase().endsWith(".pdf") ? "📕" : (doc.toLowerCase().endsWith(".md") ? "📝" : "📄");
+      const label = page ? `${doc} (p. ${page})` : doc;
+      return `<span class="source-chip source-pill-clickable" onclick="openDocumentViewer('${escapeHtml(doc)}', ${pageArg})" title="Preview document">${icon} ${escapeHtml(label)}</span>`;
+    }
+  );
   s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[+i] + "</code>");
   return s;
 }
@@ -488,8 +513,15 @@ function renderSources(container, sources) {
   list.className = "sources-list";
   for (const s of sources) {
     const pill = document.createElement("span");
-    pill.className = "source-chip";
-    pill.textContent = "📄 " + s.name + (s.page != null ? " (p. " + s.page + ")" : "");
+    pill.className = "source-chip source-pill-clickable";
+    pill.setAttribute("role", "button");
+    pill.setAttribute("tabindex", "0");
+    pill.title = "Click to preview document";
+    const icon = s.name.toLowerCase().endsWith(".pdf") ? "📕" : (s.name.toLowerCase().endsWith(".md") ? "📝" : "📄");
+    pill.textContent = `${icon} ${s.name}${s.page != null ? " (p. " + s.page + ")" : ""}`;
+    pill.addEventListener("click", () => {
+      openDocumentViewer(s.name, s.page, s.snippet);
+    });
     list.appendChild(pill);
   }
   card.appendChild(list);
@@ -944,27 +976,111 @@ async function loadBackendStatus() {
   } catch (_) { /* ignore */ }
 }
 
-// --- Profiles Controller -------------------------------------------------
+// --- Profiles & Custom Domain Controller ---------------------------------
+const DOMAIN_ICONS = {
+  default: "🌐",
+  legal: "⚖️",
+  healthcare: "🏥",
+  finance: "📊",
+  trading: "📈",
+};
+
+function getDomainIcon(profile) {
+  if (!profile) return "🌐";
+  const id = (profile.id || "").toLowerCase();
+  if (DOMAIN_ICONS[id]) return DOMAIN_ICONS[id];
+  if (id.includes("legal") || id.includes("compli")) return "⚖️";
+  if (id.includes("health") || id.includes("medic")) return "🏥";
+  if (id.includes("fin") || id.includes("quant") || id.includes("trad")) return "📊";
+  return "🌐";
+}
+
+function updateActiveDomainTrigger() {
+  const p = profiles.find((x) => x.id === currentProfileId) || profiles[0];
+  if (!p) return;
+  if (domainActiveIcon) domainActiveIcon.textContent = getDomainIcon(p);
+  if (domainActiveName) domainActiveName.textContent = p.name || p.id;
+  if (profileSelectEl) profileSelectEl.value = p.id;
+  updateActiveProfileLabel();
+}
+
+function selectProfile(id) {
+  currentProfileId = id;
+  updateActiveDomainTrigger();
+  if (domainDropdownMenu) {
+    domainDropdownMenu.querySelectorAll(".domain-item").forEach((item) => {
+      const isCurrent = item.dataset.profileId === id;
+      item.classList.toggle("active", isCurrent);
+      const checkEl = item.querySelector(".domain-item-check");
+      if (checkEl) checkEl.textContent = isCurrent ? "✓" : "";
+    });
+  }
+}
+
+function closeDomainDropdown() {
+  if (domainDropdownMenu) domainDropdownMenu.classList.remove("show");
+  if (domainDropdownTrigger) domainDropdownTrigger.setAttribute("aria-expanded", "false");
+}
+
+function toggleDomainDropdown() {
+  if (!domainDropdownMenu) return;
+  const willOpen = !domainDropdownMenu.classList.contains("show");
+  domainDropdownMenu.classList.toggle("show", willOpen);
+  if (domainDropdownTrigger) {
+    domainDropdownTrigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  }
+}
+
+if (domainDropdownTrigger) {
+  domainDropdownTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleDomainDropdown();
+  });
+}
+
 async function loadProfiles() {
   try {
     const res = await fetch("/profiles");
     if (res.ok) {
       const data = await res.json();
       profiles = data.profiles || [];
-      profileSelectEl.innerHTML = "";
+      if (profileSelectEl) profileSelectEl.innerHTML = "";
+      if (domainDropdownMenu) domainDropdownMenu.innerHTML = "";
+
       for (const p of profiles) {
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = p.name || p.id;
-        profileSelectEl.appendChild(opt);
+        if (profileSelectEl) {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.name || p.id;
+          profileSelectEl.appendChild(opt);
+        }
+
+        if (domainDropdownMenu) {
+          const item = document.createElement("div");
+          item.className = "domain-item" + (p.id === currentProfileId ? " active" : "");
+          item.setAttribute("role", "menuitem");
+          item.dataset.profileId = p.id;
+          const icon = getDomainIcon(p);
+          item.innerHTML = `
+            <div class="domain-item-icon">${icon}</div>
+            <div class="domain-item-body">
+              <div class="domain-item-title">${escapeHtml(p.name || p.id)}</div>
+              <div class="domain-item-desc">${escapeHtml(p.description || "")}</div>
+            </div>
+            <div class="domain-item-check">${p.id === currentProfileId ? "✓" : ""}</div>
+          `;
+          item.addEventListener("click", () => {
+            selectProfile(p.id);
+            closeDomainDropdown();
+          });
+          domainDropdownMenu.appendChild(item);
+        }
       }
-      if (profiles.some((p) => p.id === currentProfileId)) {
-        profileSelectEl.value = currentProfileId;
-      } else if (profiles.length > 0) {
+
+      if (!profiles.some((p) => p.id === currentProfileId) && profiles.length > 0) {
         currentProfileId = profiles[0].id;
-        profileSelectEl.value = currentProfileId;
       }
-      updateActiveProfileLabel();
+      updateActiveDomainTrigger();
     }
   } catch (_) { /* ignore */ }
 }
@@ -976,10 +1092,11 @@ function updateActiveProfileLabel() {
   }
 }
 
-profileSelectEl.addEventListener("change", (e) => {
-  currentProfileId = e.target.value;
-  updateActiveProfileLabel();
-});
+if (profileSelectEl) {
+  profileSelectEl.addEventListener("change", (e) => {
+    selectProfile(e.target.value);
+  });
+}
 
 btnProfileConfig.addEventListener("click", () => {
   const p = profiles.find((x) => x.id === currentProfileId);
@@ -1162,9 +1279,119 @@ kbUploadBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Benchmarks Viewer ---------------------------------------------------
-btnBenchmarks.addEventListener("click", async () => {
-  modalBenchmarks.classList.add("show");
+// --- Document Preview Modal & Highlighting --------------------------------
+function highlightSnippetInText(fullText, snippet) {
+  if (!snippet || !fullText) return fullText;
+  const cleanSnippet = snippet.trim();
+  if (cleanSnippet.length < 5) return fullText;
+
+  // Try exact match first
+  const exactIndex = fullText.indexOf(cleanSnippet);
+  if (exactIndex !== -1) {
+    const before = fullText.slice(0, exactIndex);
+    const match = fullText.slice(exactIndex, exactIndex + cleanSnippet.length);
+    const after = fullText.slice(exactIndex + cleanSnippet.length);
+    return `${before}<mark class="bg-yellow-400/40 text-current rounded px-1">${match}</mark>${after}`;
+  }
+
+  // Try matching sentences of snippet
+  const sentences = cleanSnippet.split(/(?<=[.!?\n])\s+/).filter((s) => s.trim().length > 15);
+  for (const sent of sentences) {
+    const sIndex = fullText.indexOf(sent.trim());
+    if (sIndex !== -1) {
+      const sMatch = fullText.slice(sIndex, sIndex + sent.trim().length);
+      return fullText.replace(
+        sMatch,
+        `<mark class="bg-yellow-400/40 text-current rounded px-1">${sMatch}</mark>`
+      );
+    }
+  }
+
+  // Anchor match on first 50 characters
+  const anchor = cleanSnippet.slice(0, 50).trim();
+  const anchorIndex = fullText.indexOf(anchor);
+  if (anchorIndex !== -1) {
+    let endIdx = fullText.indexOf("\n", anchorIndex);
+    if (endIdx === -1 || endIdx - anchorIndex > 350) endIdx = anchorIndex + anchor.length;
+    const match = fullText.slice(anchorIndex, endIdx);
+    const before = fullText.slice(0, anchorIndex);
+    const after = fullText.slice(endIdx);
+    return `${before}<mark class="bg-yellow-400/40 text-current rounded px-1">${match}</mark>${after}`;
+  }
+
+  return fullText;
+}
+
+window.openDocumentViewer = async function (filename, page = null, snippet = null) {
+  if (!docViewerModal) return;
+  docViewerModal.classList.add("show");
+
+  if (docViewerTitle) docViewerTitle.textContent = filename;
+  if (docViewerSubtitle) {
+    docViewerSubtitle.textContent = page != null ? `Page ${page}` : "Full Document";
+  }
+  if (docViewerDownloadBtn) {
+    docViewerDownloadBtn.href = `/documents/${encodeURIComponent(filename)}/download?profile_id=${encodeURIComponent(currentProfileId)}`;
+    docViewerDownloadBtn.download = filename;
+  }
+
+  const isPdf = filename.toLowerCase().endsWith(".pdf");
+  if (docViewerIcon) {
+    docViewerIcon.textContent = isPdf ? "📕" : (filename.toLowerCase().endsWith(".md") ? "📝" : "📄");
+  }
+
+  if (isPdf) {
+    if (docViewerLoading) docViewerLoading.style.display = "none";
+    const pageNumber = page != null ? page : 1;
+    const profileParam = currentProfileId ? `?profile_id=${encodeURIComponent(currentProfileId)}` : "";
+    const pdfUrl = `/documents/${encodeURIComponent(filename)}/download${profileParam}#page=${pageNumber}&view=FitH&toolbar=1`;
+    if (docViewerContent) {
+      docViewerContent.innerHTML = `<iframe class="doc-viewer-pdf-frame w-full h-[75vh]" src="${pdfUrl}" title="${escapeHtml(filename)}"></iframe>`;
+    }
+    return;
+  }
+
+  // Markdown or Text document
+  if (docViewerLoading) docViewerLoading.style.display = "flex";
+  if (docViewerContent) docViewerContent.innerHTML = "";
+
+  try {
+    const res = await fetch(`/documents/${encodeURIComponent(filename)}/view?profile_id=${encodeURIComponent(currentProfileId)}`);
+    if (res.ok) {
+      const rawText = await res.text();
+      if (docViewerLoading) docViewerLoading.style.display = "none";
+      const processed = highlightSnippetInText(rawText, snippet);
+      if (docViewerContent) {
+        docViewerContent.innerHTML = renderMarkdown(processed);
+        const markEl = docViewerContent.querySelector("mark");
+        if (markEl) {
+          setTimeout(() => {
+            markEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 200);
+        }
+      }
+    } else {
+      if (docViewerLoading) docViewerLoading.style.display = "none";
+      if (docViewerContent) {
+        docViewerContent.innerHTML = `<div class="status-msg error">Failed to load document (${res.status} ${res.statusText}).</div>`;
+      }
+    }
+  } catch (err) {
+    if (docViewerLoading) docViewerLoading.style.display = "none";
+    if (docViewerContent) {
+      docViewerContent.innerHTML = `<div class="status-msg error">Error loading document: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+};
+
+if (docViewerClose) {
+  docViewerClose.addEventListener("click", () => {
+    if (docViewerModal) docViewerModal.classList.remove("show");
+  });
+}
+
+// --- Benchmarks Viewer & Runner ------------------------------------------
+async function loadBenchmarkReport() {
   bmSummaryChips.innerHTML = "";
   bmReportContent.textContent = "Fetching latest benchmark analytics…";
   try {
@@ -1187,7 +1414,7 @@ btnBenchmarks.addEventListener("click", async () => {
           bmSummaryChips.appendChild(chip);
         }
       } else {
-        bmReportContent.textContent = "No benchmark report found. Run `uv run python -m src.benchmarks.cli` to generate reports.";
+        bmReportContent.textContent = "No benchmark report found. Click 'Run Benchmark Evaluator' in Settings to evaluate models.";
       }
     } else {
       bmReportContent.textContent = "Failed to fetch benchmark report.";
@@ -1195,9 +1422,69 @@ btnBenchmarks.addEventListener("click", async () => {
   } catch (_) {
     bmReportContent.textContent = "Network error loading benchmark report.";
   }
-});
+}
+
+if (btnBenchmarks) {
+  btnBenchmarks.addEventListener("click", async () => {
+    modalBenchmarks.classList.add("show");
+    await loadBenchmarkReport();
+  });
+}
+
+if (btnViewBenchmarks) {
+  btnViewBenchmarks.addEventListener("click", async () => {
+    modalSettings.classList.remove("show");
+    modalBenchmarks.classList.add("show");
+    await loadBenchmarkReport();
+  });
+}
+
+if (btnRunBenchmarks) {
+  btnRunBenchmarks.addEventListener("click", async () => {
+    if (!benchmarkRunStatus) return;
+    benchmarkRunStatus.textContent = "Running embedding model benchmarks… this may take 30–60s.";
+    benchmarkRunStatus.className = "status-msg";
+    btnRunBenchmarks.disabled = true;
+    try {
+      const res = await fetch("/benchmarks/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ top_k: 5, num_samples: 5 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        benchmarkRunStatus.textContent = data.message || "Benchmark evaluation completed successfully!";
+        benchmarkRunStatus.className = "status-msg success";
+        if (modalBenchmarks.classList.contains("show")) {
+          await loadBenchmarkReport();
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        benchmarkRunStatus.textContent = err.detail || "Benchmark run failed.";
+        benchmarkRunStatus.className = "status-msg error";
+      }
+    } catch (err) {
+      benchmarkRunStatus.textContent = "Network error while executing benchmarks.";
+      benchmarkRunStatus.className = "status-msg error";
+    } finally {
+      btnRunBenchmarks.disabled = false;
+    }
+  });
+}
 
 bmClose.addEventListener("click", () => modalBenchmarks.classList.remove("show"));
+
+// Keyboard shortcuts (Escape key closes modals & domain dropdown)
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeDomainDropdown();
+    if (docViewerModal) docViewerModal.classList.remove("show");
+    if (modalBenchmarks) modalBenchmarks.classList.remove("show");
+    if (modalSettings) modalSettings.classList.remove("show");
+    if (modalProfile) modalProfile.classList.remove("show");
+    if (modalKb) modalKb.classList.remove("show");
+  }
+});
 
 // Overlay click to close
 window.addEventListener("click", (e) => {
@@ -1205,6 +1492,17 @@ window.addEventListener("click", (e) => {
   if (e.target === modalKb) modalKb.classList.remove("show");
   if (e.target === modalBenchmarks) modalBenchmarks.classList.remove("show");
   if (e.target === modalSettings) modalSettings.classList.remove("show");
+  if (e.target === docViewerModal) docViewerModal.classList.remove("show");
+
+  // Close domain dropdown when clicking outside
+  if (
+    domainDropdownTrigger &&
+    domainDropdownMenu &&
+    !domainDropdownTrigger.contains(e.target) &&
+    !domainDropdownMenu.contains(e.target)
+  ) {
+    closeDomainDropdown();
+  }
 });
 
 // --- Initialization ------------------------------------------------------

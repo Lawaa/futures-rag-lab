@@ -206,3 +206,57 @@ def test_set_pinned_marks_conversation(tmp_path: Path) -> None:
 
     assert service.set_pinned("sess-1", True) is True
     assert service.list_conversations()[0]["pinned"] is True
+
+
+def test_multi_turn_quote_context_retention() -> None:
+    docs = [
+        Document(
+            page_content="Initial margin requirement is 10% of contract value.",
+            metadata={"source": "rules.pdf", "page": 2},
+        )
+    ]
+    # Retriever returns docs on turn 1, but empty list on turn 2
+    class AlternatingRetriever:
+        def __init__(self, first_docs: list[Document]):
+            self.first_docs = first_docs
+            self.called = 0
+
+        def invoke(self, query: str):
+            self.called += 1
+            if self.called == 1:
+                return self.first_docs
+            return []
+
+    retriever = AlternatingRetriever(docs)
+    llm = RoutingFakeChatModel(
+        answer_response="The quote is: Initial margin requirement is 10% of contract value.",
+        groundedness_response="yes",
+        search_response="margin requirement",
+    )
+    service = RagService(llm=llm, retriever=retriever, settings=Settings())
+
+    # Turn 1
+    ans1 = service.answer("What is the margin requirement?", "sess-quote")
+    assert ans1.grounded is True
+    assert len(ans1.sources) == 1
+    assert ans1.sources[0].name == "rules.pdf"
+
+    # Turn 2: Follow-up quote question where retriever returns empty
+    ans2 = service.answer("quote the exact text used above", "sess-quote")
+    assert ans2.grounded is True
+    assert "not found in loaded documents" not in ans2.text.lower()
+    assert len(ans2.sources) == 1
+    assert ans2.sources[0].name == "rules.pdf"
+    assert ans2.sources[0].page == 3  # 1-indexed page from page 2
+
+
+def test_reset_history_clears_session_documents() -> None:
+    docs = [Document(page_content="Some content", metadata={"source": "a.txt"})]
+    service, _ = _make_service("answer", docs)
+
+    service.retrieve("question", "sess-clear")
+    assert "sess-clear" in service._session_documents
+    assert len(service._session_documents["sess-clear"]) == 1
+
+    service.reset_history("sess-clear")
+    assert "sess-clear" not in service._session_documents

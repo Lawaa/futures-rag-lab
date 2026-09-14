@@ -297,6 +297,20 @@ An answer judged ungrounded is **labelled** as coming from general knowledge and
 has its (misleading) local-document citations **removed**, so users are never
 shown sources that don't actually back the answer.
 
+### 7.2 Multi-turn context retention & quote follow-ups
+
+In multi-turn conversations, users frequently ask follow-up questions such as:
+- *"Quote the exact text used above."*
+- *"Where in the text does it say that?"*
+- *"Can you provide the exact sentence and citation?"*
+
+Under standard naive RAG, asking for a direct quote from the previous turn often triggers a fresh vector search using keywords like *"quote"*, which may fail to retrieve relevant passages or return low MMR scores. Naive Self-RAG then falsely marks the answer as ungrounded and injects a *"This information is not found in loaded documents"* fallback disclaimer.
+
+To solve this:
+1. **Quote Follow-up Detection:** The retrieval pipeline identifies follow-up verification/quote intent and injects a summarized context from the immediately preceding turn into `prepare_query`.
+2. **State Machine Retention:** The `RetrievalState` graph explicitly retains the previous turn's candidate document chunks if the follow-up asks for quotes or if a fresh search yields zero results.
+3. **Groundedness Context Merging:** In `_is_grounded`, the validation chain evaluates the answer against both the current retrieval results and prior turn candidate context, preserving valid citations and eliminating false fallback notes.
+
 ---
 
 ## 8. The language model abstraction
@@ -442,7 +456,12 @@ endpoint, that setup is still needed. The web UI reads this on load and shows a
 one-time panel to collect the key, which is then validated and stored in the OS
 credential manager. This is what allows a freshly installed desktop build to
 open its window and guide the user through setup, rather than showing a blank
-error.
+### 10.4 Interactive Document Viewer & Custom Domain Selector
+
+- **Document Viewer Modal:** Clickable citation pills (`[manual.pdf (Page 2)]`) open a dedicated, high-resolution document viewer (`max-w-6xl`, `w-[90vw]`, `h-[85vh]`).
+  - **PDF Documents:** Renders via an embedded iframe with native browser parameters: `#page=${pageNumber}&view=FitH&toolbar=1`. This auto-fits the PDF horizontally to the viewport width, positions the viewport to the cited page, and enables standard zoom (`+`/`-`), page navigation, and printing controls.
+  - **Markdown & Plain Text:** Fetches raw text and highlights the exact snippet/sentence matching the citation using `<mark class="bg-yellow-400/40">`, automatically auto-scrolling to the highlighted passage.
+- **Custom Floating Domain Selector:** Replaces native HTML `<select>` elements with a floating dropdown menu (`#domainDropdownMenu`). Featuring ChatGPT/Grok-inspired aesthetics, it provides smooth hover highlights (`hover:bg-slate-800/80` in dark mode, `hover:bg-slate-100` in light mode), subtle text transitions, and active checkmarks while preserving the active persona badge.
 
 ---
 
