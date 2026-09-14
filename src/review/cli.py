@@ -54,6 +54,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Cyclomatic complexity limit before raising a warning (default: 10).",
     )
     parser.add_argument(
+        "--graph-depth",
+        type=int,
+        default=2,
+        help="Neighbor traversal depth in the Code Knowledge Graph (default: 2).",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Fail (exit code 1) on warnings as well as blocking security violations.",
@@ -134,6 +140,13 @@ def _display_report(report: HybridReviewReport) -> None:
     else:
         print("   [+] All AST safety and structural checks passed.")
 
+    if report.impact_summary:
+        nodes_cnt = report.impact_summary.get("total_nodes", 0)
+        edges_cnt = report.impact_summary.get("total_edges", 0)
+        callers = report.impact_summary.get("impacted_callers", [])
+        callees = report.impact_summary.get("impacted_callees", [])
+        print(f"   [CKG Impact] Neighborhood: {nodes_cnt} node(s), {edges_cnt} edge(s) | Upstream callers: {len(callers)} | Outbound calls: {len(callees)}")
+
     if report.llm_feedback:
         print("\n   --- LLM Architectural Review Feedback ---")
         for line in report.llm_feedback.splitlines():
@@ -193,11 +206,12 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"[*] Inspecting {len(files_to_check)} file(s) with AST Safety Gate...")
     if args.llm_review:
-        print("[*] LLM Architectural Review stage enabled.")
+        print(f"[*] Graph-Aware LLM Review enabled (neighborhood depth: {args.graph_depth}).")
 
     reviewer = HybridCodeReviewer(
         settings=get_settings(),
         complexity_threshold=args.complexity_threshold,
+        graph_depth=args.graph_depth,
     )
     reports = reviewer.review_files(files_to_check, enable_llm_review=args.llm_review)
     _, warning_count, blocked_count = _print_review_summary(reports)

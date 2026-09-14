@@ -4,35 +4,36 @@ A local-first pre-commit code quality gate for `futures-rag-lab`. It pairs fast,
 
 ---
 
-## 💡 How It Works
+## 💡 How It Works (2-Tiered Safety Guard & Graph Review)
 
-The system operates in two stages:
+The system operates in two tiers:
 
 ```
 [ Git Commit or Manual CLI ]
              │
              ▼
- ┌───────────────────────┐
- │ Stage 1: AST Analyzer │ ──(Blocking Issue: eval/exec/secrets)──► 🛑 Commit Aborted
- └───────────────────────┘
+ ┌───────────────────────────────────┐
+ │ Tier 1: Instant Local AST Guard   │ ──(Blocking Issue: eval/exec/secrets)──► 🛑 Commit Aborted
+ └───────────────────────────────────┘
              │
       (Pass / Warnings)
              │
              ▼
- ┌───────────────────────┐
- │ Stage 2: AI Reviewer  │ ──(Optional: --llm-review)─────────────► 💬 Design Feedback
- └───────────────────────┘
-             │
+ ┌───────────────────────────────────┐
+ │ Tier 2: Code Knowledge Graph      │ ◄─── NetworkX In-Memory Dependency Graph
+ │         & AI Impact Review        │      (Traverses IMPORTS, CONTAINS, CALLS)
+ └───────────────────────────────────┘
+             │ ──(Optional: --llm-review)──► 💬 Cross-File Impact & Design Feedback
              ▼
-         ✅ Commit Allowed
+       ✅ Commit Allowed
 ```
 
-1. **Stage 1: Fast Local AST Check (Zero-cost, millisecond execution)**
+1. **Tier 1: Fast Local AST Check (Zero-cost, millisecond execution)**
    Uses Python's native Abstract Syntax Tree parser to analyze your code without executing it. It checks for security risks, type annotations, error handling hygiene, and cyclomatic complexity.
-   *If a critical safety violation is detected, the check immediately fails and aborts before calling any external APIs.*
+   *If a critical safety violation is detected, the check immediately fails and aborts before calling any graph traversal or external APIs.*
 
-2. **Stage 2: AI Architectural Review (Optional)**
-   If enabled, a condensed structural summary of your code is sent to your configured language model (hosted Gemini or local Ollama) to give actionable feedback on modularity, error resilience, and code clarity.
+2. **Tier 2: Graph-Aware Architectural & Impact Review (Optional with `--llm-review`)**
+   Builds an in-memory Code Knowledge Graph (CKG) using `networkx` mapping files, classes, functions, and imports. When a file is modified, it extracts the 1-to-2 hop neighborhood context (upstream callers in other files, downstream calls, and imported modules) and sends this minimal, high-signal context to the configured LLM (Gemini or local Ollama) to identify cross-file breaking changes and architectural side effects.
 
 ---
 
@@ -89,7 +90,8 @@ uv run python -m src.review.cli --staged --llm-review
 | :--- | :--- |
 | `--files [PATH ...]` | One or more Python files or directories to inspect. |
 | `--staged` | Inspect only files currently staged for git commit. |
-| `--llm-review` | Request second-stage AI architectural feedback. |
+| `--llm-review` | Request second-stage AI architectural & graph impact feedback. |
+| `--graph-depth N` | Neighbor traversal depth in the Code Knowledge Graph (default: `2`). |
 | `--install-hook` | Write the pre-commit hook into `.git/hooks/pre-commit`. |
 | `--complexity-threshold N` | Custom limit for cyclomatic complexity (default: `10`). |
 | `--strict` | Fail (exit code 1) on warnings as well as blocking security violations. |
