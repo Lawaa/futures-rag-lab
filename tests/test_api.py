@@ -594,20 +594,43 @@ def test_ui_components_for_inspector_and_graph() -> None:
     html = html_res.text
     # Verify active query bar was removed
     assert 'id="activeQueryBanner"' not in html
-    # Verify Knowledge Graph widget controls
+    # Verify mock macOS window control dots were completely removed
+    assert "window-controls" not in html
+    assert "win-btn" not in html
+    assert "win-close" not in html
+
+    # Verify Knowledge Graph widget controls & explicit on-screen category legend
     assert 'id="graphInfoBtn"' in html
     assert 'id="btnExpandGraph"' in html
     assert 'id="modal-graph-viewer"' in html
+    assert "graph-canvas-legend" in html
+    assert "graph-info-banner" in html
     assert 'id="modal-pdf-viewer"' in html
+
+    # Verify Dynamic 2-Color Accent system controls in Settings
+    assert 'id="setting-accent-preset"' in html
+    assert 'id="setting-accent-primary"' in html
+    assert 'id="setting-accent-secondary"' in html
+    assert 'id="btn-reset-accents"' in html
 
     css_res = client.get("/static/assets/app.css")
     assert css_res.status_code == 200
     css = css_res.text
-    # Verify Light Mode overhaul and extracted highlight styling
-    assert '[data-theme="light"] .msg-row.bot .msg-bubble' in css
-    assert ".extracted-highlight" in css
-    assert ".graph-viewer-card" in css
-    assert ".context-container" in css
+    # Verify Midnight atmosphere and dynamic 2-color accent variables
+    assert "--accent-primary: #38bdf8;" in css
+    assert "--accent-secondary: #c084fc;" in css
+    assert "--bg-primary: #0A0E1A;" in css
+    assert "window-controls" not in css
+    assert ".graph-canvas-legend" in css
+    assert ".accent-color-pickers-row" in css
+
+    js_res = client.get("/static/assets/app.js")
+    assert js_res.status_code == 200
+    js = js_res.text
+    assert "applyAccentColors" in js
+    assert "initAccentColors" in js
+    assert "ACCENT_PRESETS" in js
+
 
 
 

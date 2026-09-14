@@ -3,28 +3,38 @@
   --font-main: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Dark Slate & Cyber Theme (image_cfc17b.jpg) */
-  --bg-primary: #080C14;
-  --bg-sidebar: rgba(11, 16, 26, 0.78);
-  --bg-surface: rgba(15, 23, 42, 0.65);
-  --bg-card: rgba(20, 30, 48, 0.55);
-  --bg-hover: rgba(30, 41, 59, 0.65);
-  --bg-active: rgba(38, 54, 84, 0.75);
-  
-  --border: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-glow: rgba(56, 189, 248, 0.35);
-  --border-violet-glow: rgba(139, 92, 246, 0.35);
-  
-  --accent: #38bdf8;
-  --accent-hover: #0ea5e9;
-  --accent-soft: rgba(56, 189, 248, 0.12);
-  --accent-glow: 0 0 24px rgba(56, 189, 248, 0.28);
+  /* Dynamic 2-Color Accent System (User Customizable) */
+  --accent-primary: #38bdf8;        /* Electric Cyan default */
+  --accent-secondary: #c084fc;      /* Neon Violet default */
+  --accent-primary-hover: #0ea5e9;
+  --accent-secondary-hover: #a855f7;
+  --accent-primary-soft: rgba(56, 189, 248, 0.14);
+  --accent-secondary-soft: rgba(192, 132, 252, 0.14);
+  --accent-primary-glow: rgba(56, 189, 248, 0.35);
+  --accent-secondary-glow: rgba(192, 132, 252, 0.35);
 
-  --cyan-accent: #06b6d4;
-  --cyan-glow: 0 0 20px rgba(6, 182, 212, 0.35);
-  --violet-accent: #8b5cf6;
-  --violet-glow: 0 0 20px rgba(139, 92, 246, 0.35);
+  /* Deep Midnight Atmosphere (image_db1edf.jpg) */
+  --bg-primary: #0A0E1A;
+  --bg-sidebar: rgba(13, 17, 32, 0.78);
+  --bg-surface: rgba(15, 23, 42, 0.65);
+  --bg-card: rgba(20, 28, 48, 0.58);
+  --bg-hover: rgba(30, 41, 59, 0.68);
+  --bg-active: rgba(38, 54, 84, 0.78);
+  
+  --border: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-glow: var(--accent-primary-glow);
+  --border-violet-glow: var(--accent-secondary-glow);
+  
+  --accent: var(--accent-primary);
+  --accent-hover: var(--accent-primary-hover);
+  --accent-soft: var(--accent-primary-soft);
+  --accent-glow: 0 0 24px var(--accent-primary-glow);
+
+  --cyan-accent: var(--accent-primary);
+  --cyan-glow: 0 0 20px var(--accent-primary-glow);
+  --violet-accent: var(--accent-secondary);
+  --violet-glow: 0 0 20px var(--accent-secondary-glow);
   
   --text: #F8FAFC;
   --text-muted: #94A3B8;
@@ -438,45 +448,6 @@ html, body {
   overflow: hidden;
 }
 
-/* Window Controls (macOS style dots) */
-.window-controls {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-right: 4px;
-}
-
-.win-btn {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  display: inline-block;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.win-btn:hover {
-  transform: scale(1.15);
-  opacity: 0.85;
-}
-
-.win-close {
-  background: #ff5f56;
-  border: 1px solid rgba(0, 0, 0, 0.25);
-  box-shadow: 0 0 6px rgba(255, 95, 86, 0.35);
-}
-
-.win-minimize {
-  background: #ffbd2e;
-  border: 1px solid rgba(0, 0, 0, 0.25);
-  box-shadow: 0 0 6px rgba(255, 189, 46, 0.35);
-}
-
-.win-maximize {
-  background: #27c93f;
-  border: 1px solid rgba(0, 0, 0, 0.25);
-  box-shadow: 0 0 6px rgba(39, 201, 63, 0.35);
-}
 
 .mobile-toggle {
   display: none;
@@ -3086,15 +3057,139 @@ mark {
   position: relative;
   background: radial-gradient(circle at 50% 50%, rgba(20, 28, 48, 0.6) 0%, rgba(10, 14, 26, 0.95) 100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   padding: 20px;
 }
 
+.graph-info-banner {
+  position: absolute;
+  top: 14px;
+  left: 20px;
+  right: 20px;
+  z-index: 5;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.graph-info-banner .info-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.graph-canvas-legend {
+  position: absolute;
+  bottom: 14px;
+  left: 20px;
+  right: 20px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.canvas-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.canvas-legend-item .legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.canvas-legend-item .legend-sub {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
 .graph-modal-svg {
   width: 100%;
   height: 100%;
+}
+
+/* Dual Accent Color Pickers in Settings */
+.accent-color-pickers-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.color-picker-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.color-picker-box label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.color-picker-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.color-picker-input-wrap input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.color-picker-input-wrap input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker-input-wrap input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+}
+
+.color-hex-tag {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .graph-node-details-pane {

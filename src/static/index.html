@@ -73,11 +73,6 @@
       <!-- Minimalist Glassmorphism Top Bar with window controls -->
       <header class="topbar">
         <div class="topbar-left">
-          <div class="window-controls" aria-hidden="true">
-            <span class="win-btn win-close"></span>
-            <span class="win-btn win-minimize"></span>
-            <span class="win-btn win-maximize"></span>
-          </div>
           <button class="icon-button mobile-toggle" id="btn-sidebar-toggle" aria-label="Toggle Sidebar">☰</button>
           <div class="active-conv-crumb flex-1 min-w-0 max-w-xl truncate pr-4" id="chatTitleHeader" data-i18n="headerTitle">Futures Trading Assistant</div>
         </div>
@@ -271,9 +266,19 @@
       </div>
       <div class="graph-modal-body" id="graphModalBody">
         <div class="graph-modal-canvas-wrap">
+          <div class="graph-info-banner">
+            <span class="info-icon">💡</span>
+            <span class="info-text"><strong>RAG Knowledge Graph:</strong> Visualizes the retrieval topology — tracing queries through embedding spaces to document chunks, statutory clauses, and legal norms.</span>
+          </div>
           <svg class="graph-modal-svg" id="graphModalSvg" viewBox="0 0 760 380" preserveAspectRatio="xMidYMid meet">
             <!-- Dynamically populated expanded graph -->
           </svg>
+          <div class="graph-canvas-legend">
+            <div class="canvas-legend-item"><span class="legend-dot" style="background:#38bdf8; box-shadow:0 0 8px #06b6d4;"></span><strong>🔵 Query</strong> <span class="legend-sub">User Prompt</span></div>
+            <div class="canvas-legend-item"><span class="legend-dot" style="background:#818cf8; box-shadow:0 0 8px #6366f1;"></span><strong>🟣 Synthesis</strong> <span class="legend-sub">Active RAG</span></div>
+            <div class="canvas-legend-item"><span class="legend-dot" style="background:#c084fc; box-shadow:0 0 8px #a855f7;"></span><strong>🔮 Doc Chunk</strong> <span class="legend-sub">Source File</span></div>
+            <div class="canvas-legend-item"><span class="legend-dot" style="background:#f472b6; box-shadow:0 0 8px #ec4899;"></span><strong>💖 Clause / Norm</strong> <span class="legend-sub">Statutory §</span></div>
+          </div>
         </div>
         <div class="graph-node-details-pane" id="graphNodeDetailsPane">
           <div class="node-details-header">
@@ -468,10 +473,38 @@
           <div class="form-group">
             <label for="setting-theme" data-i18n="settingsColorTheme">Color Theme</label>
             <select id="setting-theme" class="form-select">
-              <option value="dark">Dark Theme (Deep Slate #0B0F17)</option>
+              <option value="dark">Dark Theme (Deep Slate #0A0E1A)</option>
               <option value="light">Light Theme (Clean White #F8FAFC)</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="setting-accent-preset">Dynamic 2-Color Accent Palette</label>
+            <select id="setting-accent-preset" class="form-select">
+              <option value="cyber-neon">Cyber Neon (Electric Cyan #38BDF8 + Neon Violet #C084FC)</option>
+              <option value="deep-sea">Deep Sea (Ocean Cyan #00F2FE + Indigo #818CF8)</option>
+              <option value="emerald-gold">Emerald Matrix (Cyber Emerald #10B981 + Amber #F59E0B)</option>
+              <option value="sunset-rose">Sunset Horizon (Coral Pink #F43F5E + Warm Amber #F59E0B)</option>
+              <option value="synthwave">Synthwave (Hot Magenta #EC4899 + Electric Purple #8B5CF6)</option>
+              <option value="custom">Custom Dual-Accent...</option>
+            </select>
+          </div>
+          <div class="accent-color-pickers-row" id="custom-accents-row">
+            <div class="color-picker-box">
+              <label for="setting-accent-primary">Primary Accent (Cyan / Buttons / Glow)</label>
+              <div class="color-picker-input-wrap">
+                <input type="color" id="setting-accent-primary" value="#38bdf8" />
+                <span class="color-hex-tag" id="hex-accent-primary">#38BDF8</span>
+              </div>
+            </div>
+            <div class="color-picker-box">
+              <label for="setting-accent-secondary">Secondary Accent (Violet / Synthesis / Nodes)</label>
+              <div class="color-picker-input-wrap">
+                <input type="color" id="setting-accent-secondary" value="#c084fc" />
+                <span class="color-hex-tag" id="hex-accent-secondary">#C084FC</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" id="btn-reset-accents" class="btn-secondary" style="font-size:0.75rem; padding: 5px 12px; margin-bottom: 12px;">Reset to Cyber Neon</button>
           <div class="form-group">
             <label for="setting-language" data-i18n="settingsLanguage">Language</label>
             <select id="setting-language" class="form-select">

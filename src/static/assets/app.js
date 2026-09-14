@@ -293,6 +293,12 @@ const settingAppName = document.getElementById("setting-app-name");
 const settingBtnSaveName = document.getElementById("setting-btn-save-name");
 const settingNameStatus = document.getElementById("setting-name-status");
 const settingTheme = document.getElementById("setting-theme");
+const settingAccentPreset = document.getElementById("setting-accent-preset");
+const settingAccentPrimary = document.getElementById("setting-accent-primary");
+const settingAccentSecondary = document.getElementById("setting-accent-secondary");
+const hexAccentPrimary = document.getElementById("hex-accent-primary");
+const hexAccentSecondary = document.getElementById("hex-accent-secondary");
+const btnResetAccents = document.getElementById("btn-reset-accents");
 const settingLanguage = document.getElementById("setting-language");
 const stProvider = document.getElementById("st-provider");
 const stModel = document.getElementById("st-model");
@@ -460,6 +466,113 @@ btnThemeToggle.addEventListener("click", () => {
 
 if (settingTheme) {
   settingTheme.addEventListener("change", (e) => applyTheme(e.target.value));
+}
+
+// --- Dynamic 2-Color Accent Theming ---------------------------------------
+const DEFAULT_ACCENT_PRIMARY = "#38bdf8";
+const DEFAULT_ACCENT_SECONDARY = "#c084fc";
+
+const ACCENT_PRESETS = {
+  cyan_violet: { primary: "#38bdf8", secondary: "#c084fc" },
+  electric_blue: { primary: "#00f2fe", secondary: "#4facfe" },
+  emerald_purple: { primary: "#10b981", secondary: "#a855f7" },
+  sunset_neon: { primary: "#f97316", secondary: "#ec4899" },
+  matrix_glow: { primary: "#22c55e", secondary: "#06b6d4" },
+  synthwave: { primary: "#f43f5e", secondary: "#8b5cf6" },
+};
+
+function hexToRgba(hex, alpha = 1) {
+  let clean = (hex || "#38bdf8").replace("#", "");
+  if (clean.length === 3) clean = clean.split("").map(c => c + c).join("");
+  const num = parseInt(clean, 16);
+  if (isNaN(num)) return `rgba(56, 189, 248, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getSavedAccentColors() {
+  const primary = localStorage.getItem("rag_accent_primary") || DEFAULT_ACCENT_PRIMARY;
+  const secondary = localStorage.getItem("rag_accent_secondary") || DEFAULT_ACCENT_SECONDARY;
+  return { primary, secondary };
+}
+
+function applyAccentColors(primary, secondary, save = true) {
+  const root = document.documentElement;
+  root.style.setProperty("--accent-primary", primary);
+  root.style.setProperty("--accent-secondary", secondary);
+  root.style.setProperty("--accent-primary-glow", hexToRgba(primary, 0.35));
+  root.style.setProperty("--accent-secondary-glow", hexToRgba(secondary, 0.35));
+  root.style.setProperty("--accent", primary);
+  root.style.setProperty("--violet-accent", secondary);
+
+  if (save) {
+    localStorage.setItem("rag_accent_primary", primary);
+    localStorage.setItem("rag_accent_secondary", secondary);
+  }
+
+  if (settingAccentPrimary) settingAccentPrimary.value = primary;
+  if (settingAccentSecondary) settingAccentSecondary.value = secondary;
+  if (hexAccentPrimary) hexAccentPrimary.textContent = primary.toUpperCase();
+  if (hexAccentSecondary) hexAccentSecondary.textContent = secondary.toUpperCase();
+
+  if (settingAccentPreset) {
+    let matched = "custom";
+    for (const [key, p] of Object.entries(ACCENT_PRESETS)) {
+      if (p.primary.toLowerCase() === primary.toLowerCase() && p.secondary.toLowerCase() === secondary.toLowerCase()) {
+        matched = key;
+        break;
+      }
+    }
+    settingAccentPreset.value = matched;
+  }
+
+  if (typeof KNOWLEDGE_GRAPH_NODES !== "undefined") {
+    if (KNOWLEDGE_GRAPH_NODES.QUERY) {
+      KNOWLEDGE_GRAPH_NODES.QUERY.fill = primary;
+      KNOWLEDGE_GRAPH_NODES.QUERY.glow = hexToRgba(primary, 0.6);
+    }
+    if (KNOWLEDGE_GRAPH_NODES.DOC) {
+      KNOWLEDGE_GRAPH_NODES.DOC.fill = secondary;
+      KNOWLEDGE_GRAPH_NODES.DOC.glow = hexToRgba(secondary, 0.6);
+    }
+  }
+}
+
+function initAccentColors() {
+  const { primary, secondary } = getSavedAccentColors();
+  applyAccentColors(primary, secondary, false);
+}
+
+if (settingAccentPrimary) {
+  settingAccentPrimary.addEventListener("input", (e) => {
+    const sec = settingAccentSecondary ? settingAccentSecondary.value : DEFAULT_ACCENT_SECONDARY;
+    applyAccentColors(e.target.value, sec, true);
+  });
+}
+
+if (settingAccentSecondary) {
+  settingAccentSecondary.addEventListener("input", (e) => {
+    const pri = settingAccentPrimary ? settingAccentPrimary.value : DEFAULT_ACCENT_PRIMARY;
+    applyAccentColors(pri, e.target.value, true);
+  });
+}
+
+if (settingAccentPreset) {
+  settingAccentPreset.addEventListener("change", (e) => {
+    const presetKey = e.target.value;
+    if (presetKey in ACCENT_PRESETS) {
+      const { primary, secondary } = ACCENT_PRESETS[presetKey];
+      applyAccentColors(primary, secondary, true);
+    }
+  });
+}
+
+if (btnResetAccents) {
+  btnResetAccents.addEventListener("click", () => {
+    applyAccentColors(DEFAULT_ACCENT_PRIMARY, DEFAULT_ACCENT_SECONDARY, true);
+  });
 }
 
 // Mobile sidebar toggle
@@ -1852,11 +1965,14 @@ function renderDocumentGraph(docName, sectionId) {
   const pill = document.getElementById("graphDocPill");
   if (pill) pill.textContent = sectionId || docName || "Knowledge Nodes";
 
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-primary").trim() || "#38bdf8";
+  const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-secondary").trim() || "#c084fc";
+
   const nodes = [
-    { key: "QUERY", x: 45, y: 48, r: 10, label: "QUERY", fill: "#38bdf8", glow: "#06b6d4" },
+    { key: "QUERY", x: 45, y: 48, r: 10, label: "QUERY", fill: primaryColor, glow: primaryColor },
     { key: "SYNTHESIS", x: 130, y: 30, r: 12, label: "SYNTHESIS", fill: "#818cf8", glow: "#6366f1" },
     { key: "EMBED", x: 130, y: 68, r: 9, label: "EMBED", fill: "#a78bfa", glow: "#8b5cf6" },
-    { key: "DOC", x: 220, y: 48, r: 14, label: "DOC", fill: "#c084fc", glow: "#a855f7" },
+    { key: "DOC", x: 220, y: 48, r: 14, label: "DOC", fill: secondaryColor, glow: secondaryColor },
     { key: "CLAUSE", x: 310, y: 28, r: 11, label: "CLAUSE", fill: "#f472b6", glow: "#ec4899" },
     { key: "NORM", x: 315, y: 70, r: 10, label: "NORM", fill: "#34d399", glow: "#10b981" },
   ];
@@ -1883,7 +1999,7 @@ function renderDocumentGraph(docName, sectionId) {
   `;
 
   for (const l of links) {
-    svgHtml += `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="rgba(139, 92, 246, 0.45)" stroke-width="2" stroke-dasharray="3,2"/>`;
+    svgHtml += `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${hexToRgba(secondaryColor, 0.45)}" stroke-width="2" stroke-dasharray="3,2"/>`;
   }
 
   for (const n of nodes) {
@@ -1913,11 +2029,14 @@ function openKnowledgeGraphModal(docName, sectionId, activeNodeKey = "DOC") {
     graphModalSubtitle.textContent = `Visualizing semantic relationships, vector embeddings & statutory topology for ${sectionId || docName || "referenced context"}`;
   }
 
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-primary").trim() || "#38bdf8";
+  const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-secondary").trim() || "#c084fc";
+
   const modalNodes = [
-    { key: "QUERY", x: 100, y: 190, r: 24, label: "QUERY", fill: "#38bdf8", glow: "#06b6d4" },
+    { key: "QUERY", x: 100, y: 190, r: 24, label: "QUERY", fill: primaryColor, glow: primaryColor },
     { key: "SYNTHESIS", x: 260, y: 110, r: 28, label: "SYNTHESIS", fill: "#818cf8", glow: "#6366f1" },
     { key: "EMBED", x: 260, y: 270, r: 22, label: "EMBED", fill: "#a78bfa", glow: "#8b5cf6" },
-    { key: "DOC", x: 440, y: 190, r: 32, label: "DOC CHUNK", fill: "#c084fc", glow: "#a855f7" },
+    { key: "DOC", x: 440, y: 190, r: 32, label: "DOC CHUNK", fill: secondaryColor, glow: secondaryColor },
     { key: "CLAUSE", x: 620, y: 110, r: 26, label: "CLAUSE §", fill: "#f472b6", glow: "#ec4899" },
     { key: "NORM", x: 630, y: 270, r: 24, label: "NORM", fill: "#34d399", glow: "#10b981" },
   ];
@@ -1946,7 +2065,7 @@ function openKnowledgeGraphModal(docName, sectionId, activeNodeKey = "DOC") {
     `;
 
     for (const l of modalLinks) {
-      svg += `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="rgba(139, 92, 246, 0.45)" stroke-width="3" stroke-dasharray="6,4"/>`;
+      svg += `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${hexToRgba(secondaryColor, 0.45)}" stroke-width="3" stroke-dasharray="6,4"/>`;
     }
 
     for (const n of modalNodes) {
@@ -2627,6 +2746,7 @@ window.addEventListener("click", (e) => {
   } catch (_) { /* fall back to defaults */ }
 
   applyTheme(getSavedTheme());
+  initAccentColors();
   applyLanguage();
   currentId = newId();
   await loadProfiles();

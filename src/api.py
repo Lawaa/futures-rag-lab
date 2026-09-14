@@ -1102,45 +1102,90 @@ async def download_document(
     raise HTTPException(status_code=400, detail=f"Invalid storage_type '{backend}'. Must be 'local' or 's3'.")
 
 
+def _extract_pdf_page_data(
+    file_path: Path, target_page: int
+) -> tuple[str, int, int, str, str]:
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(file_path))
+    total_pages = len(reader.pages)
+    p_idx = max(0, min(total_pages - 1, target_page - 1))
+    page_num = p_idx + 1
+    full_text = reader.pages[p_idx].extract_text() or ""
+    preceding = ""
+    succeeding = ""
+
+    if p_idx > 0:
+        prev_text = reader.pages[p_idx - 1].extract_text() or ""
+        lines = [line.strip() for line in prev_text.splitlines() if line.strip()]
+        preceding = "\n".join(lines[-4:]) if lines else ""
+
+    if p_idx < total_pages - 1:
+        next_text = reader.pages[p_idx + 1].extract_text() or ""
+        lines = [line.strip() for line in next_text.splitlines() if line.strip()]
+        succeeding = "\n".join(lines[:4]) if lines else ""
+
+    return full_text, page_num, total_pages, preceding, succeeding
+
+
 def _extract_page_or_file_text(
     file_path: Path, target_page: int
 ) -> tuple[str, int, int, str, str]:
     """Extract full text and surrounding context lines for a document file."""
     suffix = file_path.suffix.lower()
-    full_text = ""
-    total_pages = 1
-    page_num = target_page
-    preceding = ""
-    succeeding = ""
-
     if suffix == ".pdf":
         try:
-            from pypdf import PdfReader
-
-            reader = PdfReader(str(file_path))
-            total_pages = len(reader.pages)
-            p_idx = max(0, min(total_pages - 1, target_page - 1))
-            page_num = p_idx + 1
-            full_text = reader.pages[p_idx].extract_text() or ""
-
-            if p_idx > 0:
-                prev_text = reader.pages[p_idx - 1].extract_text() or ""
-                lines = [line.strip() for line in prev_text.splitlines() if line.strip()]
-                preceding = "\n".join(lines[-4:]) if lines else ""
-
-            if p_idx < total_pages - 1:
-                next_text = reader.pages[p_idx + 1].extract_text() or ""
-                lines = [line.strip() for line in next_text.splitlines() if line.strip()]
-                succeeding = "\n".join(lines[:4]) if lines else ""
+            return _extract_pdf_page_data(file_path, target_page)
         except Exception as e:
             logger.warning("Error reading PDF %s: %s", file_path.name, e)
-    else:
-        try:
-            full_text = file_path.read_text(encoding="utf-8", errors="replace")
-        except Exception as e:
-            logger.warning("Error reading file %s: %s", file_path.name, e)
+            return "", target_page, 1, "", ""
 
-    return full_text, page_num, total_pages, preceding, succeeding
+    try:
+        full_text = file_path.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        logger.warning("Error reading file %s: %s", file_path.name, e)
+        full_text = ""
+    return full_text, target_page, 1, "", ""
+
+
+def _find_sentence_start(full_text: str, idx: int) -> int:
+    start = idx
+    while start > 0 and full_text[start - 1] not in ".!?":
+        if full_text[start - 1] == "\n" and start > 1 and full_text[start - 2] == "\n":
+            break
+        start -= 1
+    while start < idx and full_text[start].isspace():
+        start += 1
+    return start
+
+
+def _find_sentence_end(full_text: str, end_idx: int) -> int:
+    end = min(len(full_text), end_idx)
+    while end < len(full_text) and full_text[end] not in ".!?":
+        if full_text[end] == "\n" and end + 1 < len(full_text) and full_text[end + 1] == "\n":
+            break
+        end += 1
+    if end < len(full_text) and full_text[end] in ".!?":
+        end += 1
+    return end
+
+
+def _get_surrounding_context(
+    full_text: str, start: int, end: int, pre: str, post: str
+) -> tuple[str, str]:
+    preceding = pre
+    if not preceding and start > 0:
+        pre_chunk = full_text[max(0, start - 400):start]
+        lines = [line.strip() for line in pre_chunk.splitlines() if line.strip()]
+        preceding = "\n".join(lines[-3:]) if lines else ""
+
+    succeeding = post
+    if not succeeding and end < len(full_text):
+        post_chunk = full_text[end:min(len(full_text), end + 400)]
+        lines = [line.strip() for line in post_chunk.splitlines() if line.strip()]
+        succeeding = "\n".join(lines[:3]) if lines else ""
+
+    return preceding, succeeding
 
 
 def _expand_highlight_boundaries(
@@ -1159,38 +1204,13 @@ def _expand_highlight_boundaries(
     if idx == -1:
         return clean_snip, pre, post
 
-    start = idx
-    while start > 0 and full_text[start - 1] not in ".!?":
-        if full_text[start - 1] == "\n" and start > 1 and full_text[start - 2] == "\n":
-            break
-        start -= 1
-    while start < idx and full_text[start].isspace():
-        start += 1
-
+    start = _find_sentence_start(full_text, idx)
     match_len = len(clean_snip) if full_text.find(clean_snip) != -1 else min(40, len(clean_snip))
-    end = min(len(full_text), idx + match_len)
-    while end < len(full_text) and full_text[end] not in ".!?":
-        if full_text[end] == "\n" and end + 1 < len(full_text) and full_text[end + 1] == "\n":
-            break
-        end += 1
-    if end < len(full_text) and full_text[end] in ".!?":
-        end += 1
-
+    end = _find_sentence_end(full_text, idx + match_len)
     highlight_text = full_text[start:end].strip()
 
-    preceding_context = pre
-    if not preceding_context and start > 0:
-        pre_chunk = full_text[max(0, start - 400):start]
-        lines = [line.strip() for line in pre_chunk.splitlines() if line.strip()]
-        preceding_context = "\n".join(lines[-3:]) if lines else ""
-
-    succeeding_context = post
-    if not succeeding_context and end < len(full_text):
-        post_chunk = full_text[end:min(len(full_text), end + 400)]
-        lines = [line.strip() for line in post_chunk.splitlines() if line.strip()]
-        succeeding_context = "\n".join(lines[:3]) if lines else ""
-
-    return highlight_text, preceding_context, succeeding_context
+    preceding, succeeding = _get_surrounding_context(full_text, start, end, pre, post)
+    return highlight_text, preceding, succeeding
 
 
 @app.get("/documents/{filename}/context")
