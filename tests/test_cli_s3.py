@@ -71,6 +71,7 @@ def test_persist_s3_credentials_to_env_never_stores_secret(tmp_path: Path) -> No
     assert "RAG_AWS_SECRET_ACCESS_KEY" not in content
 
 
+@patch("src.cli.Path.home")
 @patch("src.cli._persist_aws_credentials_to_file")
 @patch("src.cli._persist_s3_credentials_to_env")
 @patch("src.cli.S3StorageService")
@@ -80,11 +81,16 @@ def test_resolve_s3_credentials_success(
     mock_s3_class: MagicMock,
     mock_persist_env: MagicMock,
     mock_persist_file: MagicMock,
+    mock_home: MagicMock,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    mock_home.return_value = tmp_path
     """Test interactive S3 resolution flow when user enables S3 and enters credentials."""
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("RAG_AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("RAG_AWS_SECRET_ACCESS_KEY", raising=False)
 
     # Prompts: 1. enable ("y"), 2. access key, 3. secret key, 4. region, 5. bucket name
     mock_input.side_effect = ["y", "AKIA_INPUT", "SECRET_INPUT", "eu-central-1", "test-bucket"]
@@ -93,7 +99,7 @@ def test_resolve_s3_credentials_success(
     mock_s3_class.return_value = mock_s3_instance
 
     initial_settings = Settings(
-        use_s3_storage=False, aws_access_key_id=None, aws_secret_access_key=None
+        _env_file=None, use_s3_storage=False, aws_access_key_id=None, aws_secret_access_key=None
     )
     result = _resolve_s3_credentials(initial_settings)
 

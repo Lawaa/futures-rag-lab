@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-09-14T11:59:45.919014+00:00",
+  "dataset_path": "data\\benchmark_dataset.json",
+  "total_documents": 70,
+  "total_chunks": 134,
+  "top_k": 5,
+  "results": [
+    {
+      "model_name": "BAAI/bge-small-en-v1.5",
+      "status": "success",
+      "top_k": 5,
+      "num_queries": 3,
+      "indexed_chunks": 134,
+      "indexing_time_sec": 10.25,
+      "indexing_throughput_chunks_per_sec": 13.07,
+      "hit_rate_at_k": 1.0,
+      "mrr_at_k": 0.8333,
+      "ndcg_at_k": 0.877,
+      "latency_p50_ms": 9.15,
+      "latency_p95_ms": 43.66,
+      "latency_mean_ms": 20.06,
+      "peak_ram_mb": 1763.45,
+      "avg_cpu_percent": 522.54,
+      "peak_vram_mb": null,
+      "error": null
+    },
+    {
+      "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+      "status": "success",
+      "top_k": 5,
+      "num_queries": 3,
+      "indexed_chunks": 134,
+      "indexing_time_sec": 1.647,
+      "indexing_throughput_chunks_per_sec": 81.35,
+      "hit_rate_at_k": 1.0,
+      "mrr_at_k": 0.5667,
+      "ndcg_at_k": 0.6726,
+      "latency_p50_ms": 11.59,
+      "latency_p95_ms": 15.38,
+      "latency_mean_ms": 12.5,
+      "peak_ram_mb": 751.58,
+      "avg_cpu_percent": 361.12,
+      "peak_vram_mb": null,
+      "error": null
+    }
+  ]
+}
