@@ -21,18 +21,32 @@ logger = get_logger(__name__)
 _TEXT_SUFFIXES = {".txt", ".md"}
 
 
+def resolve_domain(profile_id: str | None = None, filename: str = "", path: Path | None = None) -> str:
+    """Determine domain tag ('trading' vs 'legal', etc.) from profile_id, filename, or path."""
+    clean_p = (profile_id or "").strip().lower()
+    fn = filename.lower()
+    p_str = str(path).lower() if path else ""
+    if clean_p == "legal" or "ptk" in fn or "btk" in fn or "/legal/" in p_str or "\\legal\\" in p_str:
+        return "legal"
+    if clean_p in ("default", "trading", "futures") or not clean_p:
+        return "trading"
+    return clean_p
+
+
 def _load_text_file(path: Path) -> list[Document]:
     """Load a plain-text or Markdown file as a single document."""
     text = path.read_text(encoding="utf-8")
     if not text.strip():
         return []
-    return [Document(page_content=text, metadata={"source": str(path)})]
+    domain = resolve_domain(None, path.name, path)
+    return [Document(page_content=text, metadata={"source": str(path), "domain": domain})]
 
 
 def _load_pdf_file(path: Path) -> list[Document]:
     """Load a PDF as one document per (non-empty) page."""
     reader = PdfReader(str(path))
     documents: list[Document] = []
+    domain = resolve_domain(None, path.name, path)
     for page_number, page in enumerate(reader.pages):
         text = page.extract_text() or ""
         if not text.strip():
@@ -40,7 +54,7 @@ def _load_pdf_file(path: Path) -> list[Document]:
         documents.append(
             Document(
                 page_content=text,
-                metadata={"source": str(path), "page": page_number},
+                metadata={"source": str(path), "page": page_number, "domain": domain},
             )
         )
     return documents
@@ -76,17 +90,18 @@ def ingest_bytes_to_vector_db(
 ) -> int:
     """Ingest raw document bytes into ChromaDB for a given profile or default."""
     suffix = Path(filename).suffix.lower()
+    domain = resolve_domain(profile_id, filename)
     docs: list[Document] = []
     if suffix in _TEXT_SUFFIXES:
         text = file_bytes.decode("utf-8", errors="replace")
         if text.strip():
-            docs = [Document(page_content=text, metadata={"source": filename})]
+            docs = [Document(page_content=text, metadata={"source": filename, "domain": domain})]
     elif suffix == ".pdf":
         reader = PdfReader(BytesIO(file_bytes))
         for page_num, page in enumerate(reader.pages):
             text = page.extract_text() or ""
             if text.strip():
-                docs.append(Document(page_content=text, metadata={"source": filename, "page": page_num}))
+                docs.append(Document(page_content=text, metadata={"source": filename, "page": page_num, "domain": domain}))
     else:
         return 0
 

@@ -35,25 +35,25 @@
 
       <!-- Quick Nav Action Tabs from concept image -->
       <nav class="sidebar-nav">
-        <button class="sidebar-nav-item" id="nav-legal" type="button">
+        <button class="sidebar-nav-item" id="nav-legal" type="button" style="display: none;" data-i18n-title="navLegalCodes">
           <span class="nav-icon">⚖️</span>
           <span data-i18n="navLegalCodes">Legal Codes</span>
         </button>
-        <button class="sidebar-nav-item" id="nav-settings" type="button">
+        <button class="sidebar-nav-item" id="nav-settings" type="button" data-i18n-title="settingsTitle">
           <span class="nav-icon">⚙️</span>
           <span data-i18n="settingsTitle">Settings</span>
         </button>
       </nav>
 
       <div class="conv-section-label" data-i18n="conversationsLabel">Recent conversations</div>
-      <div class="conversations-list" id="conversations"></div>
+      <div class="conversations-list custom-scrollbar" id="conversations"></div>
 
       <div class="sidebar-footer">
-        <button class="sidebar-action-btn" id="btn-theme-toggle" title="Toggle Theme (Dark / Light)">
+        <button class="sidebar-action-btn" id="btn-theme-toggle" title="Toggle Theme (Dark / Light)" data-i18n-title="ttThemeToggle">
           <span class="btn-icon" id="theme-icon">🌙</span>
           <span id="theme-label">Dark Mode</span>
         </button>
-        <button class="sidebar-action-btn" id="btn-settings" title="System Settings">
+        <button class="sidebar-action-btn" id="btn-settings" title="System Settings" data-i18n-title="ttSettings">
           <span class="btn-icon">⚙️</span>
           <span data-i18n="settingsTitle">Settings</span>
         </button>
@@ -72,7 +72,7 @@
         <div class="topbar-controls">
           <!-- Custom Styled Domain Selector Dropdown -->
           <div class="domain-dropdown-container">
-            <button id="domainDropdownTrigger" class="domain-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="Select active domain persona">
+            <button id="domainDropdownTrigger" class="domain-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="Select active domain persona" data-i18n-title="ttDomainSelect">
               <span class="domain-trigger-icon" id="domainActiveIcon">🌐</span>
               <span class="domain-trigger-name" id="domainActiveName">General Futures Assistant</span>
               <svg class="domain-trigger-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -85,16 +85,16 @@
           </div>
           <select id="profile-select" style="display: none;"></select>
 
-          <button id="btn-toggle-inspector" class="ctrl-btn inspector-toggle-btn" title="Toggle Right Document Inspector">
+          <button id="btn-toggle-inspector" class="ctrl-btn inspector-toggle-btn" title="Toggle Right Document Inspector" data-i18n-title="ttInspectorToggle">
             <span>📄</span> <span class="btn-text">Inspector</span>
           </button>
-          <button id="btn-legal-corpora" class="ctrl-btn" title="Manage Official Legal Corpora (Ptk. &amp; Btk.)" style="display: none;">
+          <button id="btn-legal-corpora" class="ctrl-btn" title="Manage Official Legal Corpora (Ptk. &amp; Btk.)" style="display: none;" data-i18n-title="ttLegalCorpora">
             <span>⚖️</span> <span class="btn-text" data-i18n="navLegalCodes">Legal Codes</span>
           </button>
-          <button id="btn-profile-config" class="ctrl-btn" title="Domain Persona &amp; Guardrails">
+          <button id="btn-profile-config" class="ctrl-btn" title="Domain Persona &amp; Guardrails" data-i18n-title="ttProfileConfig">
             <span>🛡️</span> <span class="btn-text" data-i18n="navDomainConfig">Domain Config</span>
           </button>
-          <button id="btn-kb-manager" class="ctrl-btn" title="Knowledge Base Documents">
+          <button id="btn-kb-manager" class="ctrl-btn" title="Knowledge Base Documents" data-i18n-title="ttKbManager">
             <span>📁</span> <span class="btn-text" data-i18n="navDocs">Docs</span>
           </button>
         </div>
@@ -123,11 +123,11 @@
             <div class="composer-wrap">
               <div class="composer-pill">
                 <div class="composer-left-tools">
-                  <button class="composer-tool-btn" id="composer-doc-btn" type="button" title="Inspect Citations">📄</button>
-                  <button class="composer-tool-btn" id="composer-prompt-btn" type="button" title="Prompt Suggestions">💡</button>
+                  <button class="composer-tool-btn" id="composer-doc-btn" type="button" title="Inspect Citations" data-i18n-title="ttInspectCitations">📄</button>
+                  <button class="composer-tool-btn" id="composer-prompt-btn" type="button" title="Prompt Suggestions" data-i18n-title="ttPromptSuggestions">💡</button>
                 </div>
                 <textarea id="input" rows="1" placeholder="Type your question..." data-i18n-placeholder="placeholder"></textarea>
-                <button class="send-btn" id="send" title="Send message" aria-label="Send">
+                <button class="send-btn" id="send" title="Send message" aria-label="Send" data-i18n-title="ttSendMessage">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="19" x2="12" y2="5"></line>
                     <polyline points="5 12 12 5 19 12"></polyline>
@@ -153,13 +153,13 @@
               </div>
             </div>
             <div class="doc-inspector-actions">
-              <button class="inspector-action-btn view-full-doc-btn" id="btn-view-full-doc" title="View Full Document in Fullscreen">
+              <button class="inspector-action-btn view-full-doc-btn" id="btn-view-full-doc" title="View Full Document in Fullscreen" data-i18n-title="ttViewFullDoc">
                 <span class="btn-icon">📖</span> <span class="btn-label">Full Document</span>
               </button>
               <button id="btn-view-pdf" style="display: none;" aria-hidden="true"></button>
-              <button class="inspector-action-btn active" id="btn-toggle-graph" title="Toggle Knowledge Graph Widget">🕸️</button>
-              <a id="docViewerDownloadBtn" class="inspector-action-btn" title="Download Document" download target="_blank">📥</a>
-              <button class="inspector-action-btn close-btn" id="docInspectorClose" title="Close Inspector">&times;</button>
+              <button class="inspector-action-btn active" id="btn-toggle-graph" title="Toggle Knowledge Graph Widget" data-i18n-title="ttToggleGraph">🕸️</button>
+              <a id="docViewerDownloadBtn" class="inspector-action-btn" title="Download Document" download target="_blank" data-i18n-title="ttDownloadDoc">📥</a>
+              <button class="inspector-action-btn close-btn" id="docInspectorClose" title="Close Inspector" data-i18n-title="ttCloseInspector">&times;</button>
             </div>
           </div>
 
@@ -170,10 +170,10 @@
                 <span class="graph-icon">🕸️</span>
                 <span>DOCUMENT GRAPH</span>
                 <span class="graph-doc-pill" id="graphDocPill">Knowledge Nodes</span>
-                <button type="button" class="graph-info-btn" id="graphInfoBtn" title="Knowledge Graph: Visualizes how this document chunk connects to other referenced concepts and source files" aria-label="Graph Info">?</button>
+                <button type="button" class="graph-info-btn" id="graphInfoBtn" title="Knowledge Graph: Visualizes how this document chunk connects to other referenced concepts and source files" aria-label="Graph Info" data-i18n-title="ttGraphInfo">?</button>
               </div>
               <div class="graph-header-actions">
-                <button type="button" class="graph-expand-btn" id="btnExpandGraph" title="Expand Knowledge Graph Fullscreen" aria-label="Expand Graph">⛶</button>
+                <button type="button" class="graph-expand-btn" id="btnExpandGraph" title="Expand Knowledge Graph Fullscreen" aria-label="Expand Graph" data-i18n-title="ttExpandGraph">⛶</button>
               </div>
             </div>
             <div class="graph-canvas-wrap">
@@ -219,17 +219,17 @@
         </div>
         <div class="pdf-header-controls doc-header-controls">
           <div class="pdf-zoom-group" id="univPdfZoomGroup">
-            <button class="pdf-ctrl-btn" id="pdfZoomOut" title="Zoom Out (–)">−</button>
+            <button class="pdf-ctrl-btn" id="pdfZoomOut" title="Zoom Out (–)" data-i18n-title="ttZoomOut">−</button>
             <span class="pdf-zoom-level" id="pdfZoomLevel">100%</span>
-            <button class="pdf-ctrl-btn" id="pdfZoomIn" title="Zoom In (+)">+</button>
-            <button class="pdf-ctrl-btn" id="pdfZoomReset" title="Reset Zoom to 100%">100%</button>
+            <button class="pdf-ctrl-btn" id="pdfZoomIn" title="Zoom In (+)" data-i18n-title="ttZoomIn">+</button>
+            <button class="pdf-ctrl-btn" id="pdfZoomReset" title="Reset Zoom to 100%" data-i18n-title="ttZoomReset">100%</button>
           </div>
           <div class="text-zoom-group" id="univTextZoomGroup" style="display: none;">
-            <button class="pdf-ctrl-btn" id="univFontDecrease" title="Smaller Font">A−</button>
-            <button class="pdf-ctrl-btn" id="univFontIncrease" title="Larger Font">A+</button>
+            <button class="pdf-ctrl-btn" id="univFontDecrease" title="Smaller Font" data-i18n-title="ttFontDecrease">A−</button>
+            <button class="pdf-ctrl-btn" id="univFontIncrease" title="Larger Font" data-i18n-title="ttFontIncrease">A+</button>
           </div>
-          <a class="pdf-ctrl-btn" id="pdfModalDownloadBtn" title="Download Document" download target="_blank">📥</a>
-          <button class="modal-close pdf-modal-close-btn universal-doc-close-btn" id="pdfModalClose" title="Close Document Viewer">&times;</button>
+          <a class="pdf-ctrl-btn" id="pdfModalDownloadBtn" title="Download Document" download target="_blank" data-i18n-title="ttDownloadDoc">📥</a>
+          <button class="modal-close pdf-modal-close-btn universal-doc-close-btn" id="pdfModalClose" title="Close Document Viewer" data-i18n-title="ttCloseDocViewer">&times;</button>
         </div>
       </div>
       <div class="pdf-viewer-body universal-doc-body" id="pdfViewerBody">
@@ -265,7 +265,7 @@
             <span class="g-pill g-pill-clause">CLAUSE §</span>
             <span class="g-pill g-pill-norm">NORM</span>
           </div>
-          <button class="modal-close graph-modal-close-btn" id="graphModalClose" title="Close Knowledge Graph">&times;</button>
+          <button class="modal-close graph-modal-close-btn" id="graphModalClose" title="Close Knowledge Graph" data-i18n-title="ttCloseGraphModal">&times;</button>
         </div>
       </div>
       <div class="graph-modal-body" id="graphModalBody">

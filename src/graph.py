@@ -168,6 +168,16 @@ def _format_context(documents: list[Document]) -> str:
 SECTION_REGEX = re.compile(r"(\b\d+:\d+\.?\s*§|\b\d+\.?\s*§)")
 
 
+def _is_ptk(doc: Document) -> bool:
+    src = str(doc.metadata.get("source", "")).lower()
+    return "ptk" in src
+
+
+def _is_btk(doc: Document) -> bool:
+    src = str(doc.metadata.get("source", "")).lower()
+    return "btk" in src
+
+
 def _filter_legal_documents(docs: list[Document], query: str) -> list[Document]:
     """Filter or prioritize legal documents based on query intent.
 
@@ -189,14 +199,6 @@ def _filter_legal_documents(docs: list[Document], query: str) -> list[Document]:
             q,
         )
     )
-
-    def _is_ptk(doc: Document) -> bool:
-        src = doc.metadata.get("source", "").lower()
-        return "ptk" in src
-
-    def _is_btk(doc: Document) -> bool:
-        src = doc.metadata.get("source", "").lower()
-        return "btk" in src
 
     if is_ptk and not is_btk:
         ptk_docs = [d for d in docs if _is_ptk(d)]
@@ -413,6 +415,15 @@ class RetrievalGraph:
             documents = prior_docs
         if self._is_legal_profile(profile_id):
             documents = _filter_legal_documents(documents, state.get("question", ""))
+        else:
+            # Strict domain isolation: in trading / non-legal mode, legal documents must not be in context
+            documents = [
+                d for d in documents
+                if d.metadata.get("domain") != "legal"
+                and not _is_ptk(d)
+                and not _is_btk(d)
+                and "legal" not in str(d.metadata.get("source", "")).lower()
+            ]
         return {"documents": documents}
 
     def _grade(self, state: RetrievalState) -> dict:

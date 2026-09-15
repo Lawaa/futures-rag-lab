@@ -49,6 +49,36 @@ const I18N = {
     navDomainConfig: "Domain Config",
     navDocs: "Docs",
 
+    // Tooltips / Mouseover texts
+    ttThemeToggle: "Toggle Theme (Dark / Light)",
+    ttSettings: "System Settings",
+    ttDomainSelect: "Select active domain persona",
+    ttInspectorToggle: "Toggle Right Document Inspector",
+    ttLegalCorpora: "Manage Official Legal Corpora (Ptk. & Btk.)",
+    ttProfileConfig: "Domain Persona & Guardrails",
+    ttKbManager: "Knowledge Base Documents",
+    ttInspectCitations: "Inspect Citations",
+    ttPromptSuggestions: "Prompt Suggestions",
+    ttSendMessage: "Send message",
+    ttViewFullDoc: "View Full Document in Fullscreen",
+    ttToggleGraph: "Toggle Knowledge Graph Widget",
+    ttDownloadDoc: "Download Document",
+    ttCloseInspector: "Close Inspector",
+    ttGraphInfo: "Knowledge Graph: Visualizes how this document chunk connects to other referenced concepts and source files",
+    ttExpandGraph: "Expand Knowledge Graph Fullscreen",
+    ttZoomOut: "Zoom Out (–)",
+    ttZoomIn: "Zoom In (+)",
+    ttZoomReset: "Reset Zoom to 100%",
+    ttFontDecrease: "Smaller Font",
+    ttFontIncrease: "Larger Font",
+    ttCloseDocViewer: "Close Document Viewer",
+    ttCloseGraphModal: "Close Knowledge Graph",
+    ttInspectInPanel: "Inspect in Document Panel",
+    ttInspectLegalSection: "Inspect Legal Section in Inspector",
+    ttHelpful: "Helpful",
+    ttNotHelpful: "Not helpful",
+    ttCopyResponse: "Copy response",
+
     // Knowledge Base Modal
     kbTitle: "Knowledge Base Manager",
     kbUploadBtn: "Upload & Index",
@@ -178,6 +208,36 @@ const I18N = {
     navLegalCodes: "Törvénytár",
     navDomainConfig: "Domain Beállítások",
     navDocs: "Tudásbázis",
+
+    // Tooltips / Mouseover texts
+    ttThemeToggle: "Téma váltása (Sötét / Világos)",
+    ttSettings: "Rendszerbeállítások",
+    ttDomainSelect: "Aktív domain profil kiválasztása",
+    ttInspectorToggle: "Dokumentum Vizsgáló panel megnyitása/elrejtése",
+    ttLegalCorpora: "Hivatalos Törvénytár kezelése (Ptk. & Btk.)",
+    ttProfileConfig: "Domain Profil és Biztonsági Szabályok",
+    ttKbManager: "Tudásbázis Dokumentumok",
+    ttInspectCitations: "Hivatkozások vizsgálata",
+    ttPromptSuggestions: "Kérdésjavaslatok",
+    ttSendMessage: "Üzenet küldése",
+    ttViewFullDoc: "Teljes dokumentum megtekintése teljes képernyőn",
+    ttToggleGraph: "Tudásgráf widget ki/be kapcsolása",
+    ttDownloadDoc: "Dokumentum letöltése",
+    ttCloseInspector: "Dokumentum Vizsgáló bezárása",
+    ttGraphInfo: "Tudásgráf: Szemlélteti a dokumentumrészlet kapcsolódását más fogalmakhoz és forrásfájlokhoz",
+    ttExpandGraph: "Tudásgráf teljes képernyős nézete",
+    ttZoomOut: "Kicsinyítés (–)",
+    ttZoomIn: "Nagyítás (+)",
+    ttZoomReset: "Nagyítás visszaállítása 100%-ra",
+    ttFontDecrease: "Kisebb betűméret",
+    ttFontIncrease: "Nagyobb betűméret",
+    ttCloseDocViewer: "Dokumentum Előnézet bezárása",
+    ttCloseGraphModal: "Tudásgráf bezárása",
+    ttInspectInPanel: "Megtekintés a Dokumentum Vizsgálóban",
+    ttInspectLegalSection: "Jogszabályi szakasz vizsgálata",
+    ttHelpful: "Hasznos",
+    ttNotHelpful: "Nem hasznos",
+    ttCopyResponse: "Válasz másolása",
 
     // Knowledge Base Modal
     kbTitle: "Tudásbázis Kezelő",
@@ -629,6 +689,12 @@ function applyLanguage() {
       }
     }
   });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-title");
+    if (typeof T[key] === "string") {
+      el.title = T[key];
+    }
+  });
   if (inputEl) inputEl.placeholder = T.placeholder;
   if (setupKeyEl) setupKeyEl.placeholder = T.setupPlaceholder;
   if (settingLanguage) settingLanguage.value = LANG;
@@ -726,14 +792,16 @@ function renderInline(s) {
       const pageArg = page ? Number(page) : "null";
       const icon = doc.toLowerCase().endsWith(".pdf") ? "📕" : (doc.toLowerCase().endsWith(".md") ? "📝" : "📄");
       const label = page ? `${doc} (p. ${page})` : doc;
-      return `<span class="source-chip source-pill-clickable neon-pill neon-pill-cyan" onclick="openDocumentViewer('${escapeHtml(doc)}', ${pageArg})" title="Inspect in Document Panel">${icon} ${escapeHtml(label)}</span>`;
+      const chipTitle = T.ttInspectInPanel || "Inspect in Document Panel";
+      return `<span class="source-chip source-pill-clickable neon-pill neon-pill-cyan" onclick="openDocumentViewer('${escapeHtml(doc)}', ${pageArg})" title="${chipTitle}">${icon} ${escapeHtml(label)}</span>`;
     }
   );
   s = s.replace(
     /\[((?:Ptk\.|Btk\.)\s*\d+:[0-9A-Za-z.\s]+§|\d+:[0-9A-Za-z.\s]+§|§\s*\d+:[0-9A-Za-z.]+)\]/gi,
     (m, sec) => {
       const docName = sec.toLowerCase().includes("btk") ? "Btk." : "Ptk.";
-      return `<span class="source-chip source-pill-clickable neon-pill neon-pill-violet" onclick="openDocumentViewer('${docName}', null, null, '${escapeHtml(sec)}')" title="Inspect Legal Section in Inspector">⚖️ ${escapeHtml(sec)}</span>`;
+      const chipTitle = T.ttInspectLegalSection || "Inspect Legal Section in Inspector";
+      return `<span class="source-chip source-pill-clickable neon-pill neon-pill-violet" onclick="openDocumentViewer('${docName}', null, null, '${escapeHtml(sec)}')" title="${chipTitle}">⚖️ ${escapeHtml(sec)}</span>`;
     }
   );
   s = s.replace(/(\b\d+:\d+\.?\s*§(?:\s*\[[^\]]+\])?)/g, '<span class="legal-clause-token">$1</span>');
@@ -966,9 +1034,9 @@ function addMessage(role, text, opts) {
     footer.innerHTML = `
       <span>Verified Knowledge Synthesis</span>
       <div class="msg-card-actions">
-        <button class="msg-action-btn" title="Helpful" onclick="this.style.color='#34d399'">👍</button>
-        <button class="msg-action-btn" title="Not helpful" onclick="this.style.color='#ef4444'">👎</button>
-        <button class="msg-action-btn" title="Copy response" onclick="copyMessageText(this)">📋</button>
+        <button class="msg-action-btn" title="${T.ttHelpful || 'Helpful'}" onclick="this.style.color='#34d399'">👍</button>
+        <button class="msg-action-btn" title="${T.ttNotHelpful || 'Not helpful'}" onclick="this.style.color='#ef4444'">👎</button>
+        <button class="msg-action-btn" title="${T.ttCopyResponse || 'Copy response'}" onclick="copyMessageText(this)">📋</button>
       </div>
     `;
     bubble.appendChild(footer);
@@ -1535,6 +1603,9 @@ function selectProfile(id) {
   if (btnLegalCorpora) {
     btnLegalCorpora.style.display = id === "legal" ? "inline-flex" : "none";
   }
+  if (navLegal) {
+    navLegal.style.display = id === "legal" ? "inline-flex" : "none";
+  }
   if (domainDropdownMenu) {
     domainDropdownMenu.querySelectorAll(".domain-item").forEach((item) => {
       const isCurrent = item.dataset.profileId === id;
@@ -1616,6 +1687,12 @@ async function loadProfiles() {
 
       if (!profiles.some((p) => p.id === currentProfileId) && profiles.length > 0) {
         currentProfileId = profiles[0].id;
+      }
+      if (navLegal) {
+        navLegal.style.display = currentProfileId === "legal" ? "inline-flex" : "none";
+      }
+      if (btnLegalCorpora) {
+        btnLegalCorpora.style.display = currentProfileId === "legal" ? "inline-flex" : "none";
       }
       updateActiveDomainTrigger();
     }
@@ -1750,11 +1827,16 @@ function formatBytes(bytes) {
 
 function renderKbDocs(docs) {
   kbDocsList.innerHTML = "";
-  if (docs.length === 0) {
+  const isLegal = currentProfileId === "legal";
+  const filteredDocs = (docs || []).filter((doc) => {
+    const isDocLegal = doc.domain === "legal" || /^(ptk|btk)/i.test(doc.filename);
+    return isLegal ? isDocLegal : !isDocLegal;
+  });
+  if (filteredDocs.length === 0) {
     kbDocsList.innerHTML = `<tr><td colspan="4" class="text-muted">${T.kbEmpty || "No documents found for this profile."}</td></tr>`;
     return;
   }
-  for (const doc of docs) {
+  for (const doc of filteredDocs) {
     const tr = document.createElement("tr");
     const tdName = document.createElement("td");
     tdName.textContent = doc.filename;

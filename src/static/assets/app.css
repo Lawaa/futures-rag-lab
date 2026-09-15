@@ -107,6 +107,45 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+[data-theme="light"] * {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+/* Custom Styled Scrollbars */
+::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-primary-rgb, 56, 189, 248), 0.5);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-primary-rgb, 56, 189, 248), 0.5);
 }
 
 html, body {

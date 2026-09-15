@@ -170,6 +170,7 @@ class DocumentInfo(BaseModel):
     size: int
     last_modified: str
     profile_id: str | None = None
+    domain: str = "trading"
 
 
 class DocumentListResponse(BaseModel):
@@ -877,13 +878,61 @@ async def upload_document(
 
 
 def _list_local_documents(settings: Settings, profile_id: str | None) -> list[DocumentInfo]:
-    target_dir = _resolve_data_dir(settings, profile_id)
+    clean_p = (profile_id or "default").strip().lower()
+    target_dir = _resolve_data_dir(settings, clean_p)
     if not target_dir.exists():
         return []
-    documents = []
-    # If scoped to a tenant profile, only check that folder; otherwise check all data
-    paths = target_dir.iterdir() if (profile_id and profile_id != "default") else target_dir.rglob("*")
-    for path in sorted(paths):
+    documents: list[DocumentInfo] = []
+
+    if clean_p == "legal":
+        # Legal domain: list files in data/legal or legal files
+        legal_dir = settings.data_path / "legal"
+        paths = list(legal_dir.glob("*")) if legal_dir.exists() else []
+        for p in target_dir.glob("*"):
+            if ("ptk" in p.name.lower() or "btk" in p.name.lower()) and p not in paths:
+                paths.append(p)
+        for path in sorted(paths, key=lambda x: x.name):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() in (".pdf", ".txt", ".md"):
+                stat = path.stat()
+                documents.append(
+                    DocumentInfo(
+                        filename=path.name,
+                        size=stat.st_size,
+                        last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        profile_id="legal",
+                        domain="legal",
+                    )
+                )
+        return documents
+
+    if clean_p in ("default", "trading", "futures"):
+        # Trading domain: only list files in target_dir directly (NOT in subdirectories like legal/)
+        # and strictly exclude any legal codes (Ptk, Btk)
+        paths = target_dir.glob("*")
+        for path in sorted(paths, key=lambda x: x.name):
+            if not path.is_file():
+                continue
+            fn_lower = path.name.lower()
+            if "ptk" in fn_lower or "btk" in fn_lower:
+                continue
+            if path.suffix.lower() in (".pdf", ".txt", ".md"):
+                stat = path.stat()
+                documents.append(
+                    DocumentInfo(
+                        filename=path.name,
+                        size=stat.st_size,
+                        last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        profile_id="default",
+                        domain="trading",
+                    )
+                )
+        return documents
+
+    # Specific other profile (e.g. healthcare, finance)
+    paths = target_dir.glob("*")
+    for path in sorted(paths, key=lambda x: x.name):
         if not path.is_file():
             continue
         if path.suffix.lower() in (".pdf", ".txt", ".md"):
@@ -893,7 +942,8 @@ def _list_local_documents(settings: Settings, profile_id: str | None) -> list[Do
                     filename=path.name,
                     size=stat.st_size,
                     last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    profile_id=profile_id or "default",
+                    profile_id=clean_p,
+                    domain=clean_p,
                 )
             )
     return documents
@@ -906,12 +956,15 @@ async def _handle_s3_list(s3_service: S3ServiceDep, profile_id: str | None) -> l
         files = await run_in_threadpool(s3_service.list_files)
         prefix = f"{profile_id}/" if profile_id and profile_id != "default" else ""
         filtered = [f for f in files if f["filename"].startswith(prefix)] if prefix else files
+        clean_p = (profile_id or "default").strip().lower()
+        domain = "legal" if clean_p == "legal" else ("trading" if clean_p in ("default", "futures") else clean_p)
         return [
             DocumentInfo(
                 filename=f["filename"].removeprefix(prefix),
                 size=f["size"],
                 last_modified=f["last_modified"],
                 profile_id=profile_id or "default",
+                domain=domain,
             )
             for f in filtered
         ]
