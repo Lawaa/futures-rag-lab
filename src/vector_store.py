@@ -32,6 +32,16 @@ def build_vector_store(settings: Settings, profile_id: str | None = None) -> Chr
 
 def build_retriever(settings: Settings, profile_id: str | None = None) -> VectorStoreRetriever:
     """Build a Maximum Marginal Relevance retriever for balanced coverage for a tenant."""
+    if profile_id == "legal":
+        return build_vector_store(settings, profile_id=profile_id).as_retriever(
+            search_type="mmr",
+            search_kwargs={
+                "k": max(settings.retriever_k, 10),
+                "fetch_k": max(settings.retriever_fetch_k, 50),
+                "lambda_mult": 0.5,
+                "filter": {"domain": "legal"},
+            },
+        )
     return build_vector_store(settings, profile_id=profile_id).as_retriever(
         search_type="mmr",
         search_kwargs={

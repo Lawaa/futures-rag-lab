@@ -76,8 +76,20 @@ def test_ui_scrollbar_and_tooltip_localization() -> None:
     assert "::-webkit-scrollbar" in app_css
     assert "scrollbar-width: thin;" in app_css
 
-    # Törvénytár hidden initially
-    assert 'id="nav-legal" type="button" style="display: none;"' in index_html
+    # Duplicate buttons removed from left sidebar
+    assert 'id="nav-legal"' not in index_html
+    assert 'id="nav-settings"' not in index_html
+
+    # Only one Törvénytár button exists (in header)
+    assert 'id="btn-legal-corpora"' in index_html
+
+    # Only one Beállítások button exists (pinned to bottom footer)
+    assert 'id="btn-settings"' in index_html
+
+    # Dynamic suggestions by domain exist in JS
+    assert "SUGGESTIONS_BY_DOMAIN" in app_js
+    assert "getActiveSuggestions" in app_js
+    assert "Mi a magyar polgári törvénykönyv szerződéskötéssel kapcsolatos rendelkezései?" in app_js
 
     # Tooltip translation keys exist in JS
     assert "ttThemeToggle" in app_js

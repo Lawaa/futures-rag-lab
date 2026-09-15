@@ -41,6 +41,7 @@ class Profile(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     description: str = ""
     descriptions: dict[str, str] = Field(default_factory=dict)
+    domain: str | None = None
     system_prompt: str | None = None
     system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
@@ -112,6 +113,14 @@ class ProfileRegistry:
         if not found:
             updated.append(new_profile)
 
+        active = self.active_id if any(p.id == self.active_id for p in updated) else updated[0].id
+        return ProfileRegistry(profiles=tuple(updated), active_id=active)
+
+    def remove(self, profile_id: str) -> ProfileRegistry:
+        """Return a new ProfileRegistry with the specified profile removed."""
+        updated = [p for p in self.profiles if p.id != profile_id]
+        if not updated:
+            updated = [_builtin_default()]
         active = self.active_id if any(p.id == self.active_id for p in updated) else updated[0].id
         return ProfileRegistry(profiles=tuple(updated), active_id=active)
 

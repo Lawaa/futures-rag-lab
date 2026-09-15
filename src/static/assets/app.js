@@ -153,13 +153,15 @@ const I18N = {
     profModalTitle: "🛡️ Tenant & Domain Profile",
     profId: "Profile ID",
     profName: "Display Name",
+    profDomain: "Domain Category / Tag",
     profDesc: "Description (Router summary)",
     profPrompt: "System Prompt (Persona & Instructions)",
     profGuardrails: "Domain Guardrails",
     profGuardCitations: "<strong>Enforce Citations:</strong> Require explicit source document/page references for assertions",
     profGuardPhi: "<strong>Anonymize PII/PHI:</strong> Automatically redact SSN, MRN, phone, email, and patient identifiers",
-    profBtnNew: "+ New Profile",
-    profBtnSave: "Save Profile",
+    profBtnNew: "+ New Assistant",
+    profBtnSave: "Save Assistant",
+    profBtnDelete: "🗑 Delete Assistant",
   },
   hu: {
     docTitle: "Futures Kereskedési Tudástár",
@@ -313,13 +315,15 @@ const I18N = {
     profModalTitle: "🛡️ Bérlői és Domain Profil",
     profId: "Profil azonosító",
     profName: "Megjelenítendő név",
+    profDomain: "Domain Kategória / Címke",
     profDesc: "Leírás (Router összegzés)",
     profPrompt: "Rendszerutasítás / System Prompt",
     profGuardrails: "Domain Biztonsági Korlátok",
     profGuardCitations: "<strong>Kötelező Hivatkozások:</strong> Konkrét forrásdokumentum- és oldalhivatkozások megkövetelése az állításokhoz",
     profGuardPhi: "<strong>Személyes/Egészségügyi Adatok Anonimizálása:</strong> TAJ, azonosítók, telefonszám, email automatikus kitakarása",
-    profBtnNew: "+ Új profil",
-    profBtnSave: "Profil mentése",
+    profBtnNew: "+ Új asszisztens",
+    profBtnSave: "Asszisztens mentése",
+    profBtnDelete: "🗑 Asszisztens törlése",
   },
 };
 
@@ -401,11 +405,13 @@ const modalProfile = document.getElementById("modal-profile");
 const profClose = document.getElementById("prof-close");
 const profIdEl = document.getElementById("prof-id");
 const profNameEl = document.getElementById("prof-name");
+const profDomainEl = document.getElementById("prof-domain");
 const profDescEl = document.getElementById("prof-desc");
 const profPromptEl = document.getElementById("prof-prompt");
 const profGuardCitationsEl = document.getElementById("prof-guard-citations");
 const profGuardPhiEl = document.getElementById("prof-guard-phi");
 const profCreateNewBtn = document.getElementById("prof-create-new");
+const profDeleteBtn = document.getElementById("prof-delete");
 const profSaveBtn = document.getElementById("prof-save");
 const profStatusEl = document.getElementById("prof-status");
 
@@ -453,8 +459,6 @@ const docViewerClose = document.getElementById("docViewerClose") || docInspector
 const docViewerLoading = document.getElementById("docViewerLoading");
 const docViewerContent = document.getElementById("docViewerContent");
 const docViewerIcon = document.getElementById("docViewerIcon");
-const navLegal = document.getElementById("nav-legal");
-const navSettings = document.getElementById("nav-settings");
 const composerDocBtn = document.getElementById("composer-doc-btn");
 const composerPromptBtn = document.getElementById("composer-prompt-btn");
 const docViewerModal = docInspectorPane; // backward compatibility fallback
@@ -664,12 +668,105 @@ function updateAppNameUI(name) {
   if (settingAppName) settingAppName.value = currentAppName;
 }
 
-// --- Language & Suggestions ----------------------------------------------
+// --- Language & Dynamic Domain Suggestions -------------------------------
+const SUGGESTIONS_BY_DOMAIN = {
+  en: {
+    trading: [
+      "What is the difference between initial and maintenance margin?",
+      "How does a futures contract differ from a forward contract?",
+      "What happens during a margin call?",
+      "Explain daily mark-to-market settlement.",
+    ],
+    legal: [
+      "What are the contract formation rules under the Hungarian Civil Code (Ptk.)?",
+      "What are the key data privacy and regulatory compliance requirements?",
+      "How is a liability disclaimer structured under governing law?",
+      "What are the core distinctions between civil and criminal statutory provisions?",
+    ],
+    medical: [
+      "What are the primary clinical guidelines for patient data privacy (GDPR / HIPAA)?",
+      "Explain the key regulatory steps for medical device classification.",
+      "What are the ethical considerations in clinical trial reporting?",
+      "How are adverse drug events documented and escalated?",
+    ],
+    quant: [
+      "How do you calculate Value at Risk (VaR) using historical simulation?",
+      "Explain the difference between implied and historical volatility.",
+      "What are the key components of Black-Scholes options pricing?",
+      "How does delta hedging work in dynamic portfolio risk management?",
+    ],
+  },
+  hu: {
+    trading: [
+      "Mi a különbség a kezdeti és a fenntartási letét között?",
+      "Miben különbözik a futures ügylet a forward ügylettől?",
+      "Mi történik egy letétfeltöltési felszólítás (margin call) során?",
+      "Magyarázza el a napi piaci elszámolás (mark-to-market) folyamatát.",
+    ],
+    legal: [
+      "Mi a magyar polgári törvénykönyv szerződéskötéssel kapcsolatos rendelkezései?",
+      "Melyek a legfontosabb adatvédelmi megfelelőségi követelmények?",
+      "Hogyan épül fel a felelősségvállalási nyilatkozat a hatályos jog szerint?",
+      "Milyen alapvető eltérések vannak a polgári és büntetőjogi jogszabályok között?",
+    ],
+    medical: [
+      "Melyek a klinikai betegadat-kezelés és adatvédelem főbb szabályai?",
+      "Mi az orvostechnikai eszközök minősítésének és engedélyezésének menete?",
+      "Milyen etikai és jogi előírások vonatkoznak a klinikai vizsgálatokra?",
+      "Hogyan történik a nemkívánatos gyógyszerhatások dokumentálása?",
+    ],
+    quant: [
+      "Hogyan számítható ki a Value at Risk (VaR) történeti szimulációval?",
+      "Mi a különbség az implikált és a történeti volatilitás között?",
+      "Melyek a Black-Scholes opcióárazási modell főbb tényezői?",
+      "Hogyan működik a delta-hedging a portfóliókockázat kezelésében?",
+    ],
+  },
+};
+
+function resolveDomainKey(profileId) {
+  const p = (profiles || []).find((x) => x.id === profileId);
+  const raw = (p && p.domain) || profileId || "trading";
+  const r = String(raw).toLowerCase();
+  if (r === "legal") return "legal";
+  if (r === "medical" || r === "healthcare") return "medical";
+  if (r === "quant" || r === "finance") return "quant";
+  if (r === "trading" || r === "default") return "trading";
+  return "trading";
+}
+
+function getActiveSuggestions() {
+  const domainKey = resolveDomainKey(currentProfileId);
+  const langTable = SUGGESTIONS_BY_DOMAIN[LANG] || SUGGESTIONS_BY_DOMAIN.en;
+  return langTable[domainKey] || langTable.trading || [];
+}
+
+function getWelcomeText() {
+  const domainKey = resolveDomainKey(currentProfileId);
+  const welcomeTexts = {
+    en: {
+      trading: "Ask a question about your futures trading documents. Try one of these:",
+      legal: "Ask a question about statutory frameworks and regulatory compliance. Try one of these:",
+      medical: "Ask a question about clinical protocols, medical device regulations, or healthcare compliance. Try one of these:",
+      quant: "Ask a question about quantitative risk modeling, volatility estimation, and derivatives math. Try one of these:",
+    },
+    hu: {
+      trading: "Tegyen fel egy kérdést a határidős kereskedési dokumentumokkal kapcsolatban. Próbálja ki ezeket:",
+      legal: "Tegyen fel egy kérdést a jogszabályokkal és megfelelőséggel kapcsolatban. Próbálja ki ezeket:",
+      medical: "Melyek a klinikai betegadat-kezelés és adatvédelem főbb szabályai? Próbálja ki ezeket:",
+      quant: "Tegyen fel egy kérdést a kvantitatív modellezésről, volatilitásról vagy származtatott termékekről. Próbálja ki ezeket:",
+    },
+  };
+  const langTable = welcomeTexts[LANG] || welcomeTexts.en;
+  return langTable[domainKey] || langTable.trading;
+}
+
 function renderSuggestions() {
   const box = document.getElementById("suggestions");
   if (!box) return;
   box.innerHTML = "";
-  for (const text of T.suggestions) {
+  const suggestions = getActiveSuggestions();
+  for (const text of suggestions) {
     const chip = document.createElement("div");
     chip.className = "chip";
     chip.textContent = text;
@@ -702,6 +799,10 @@ function applyLanguage() {
   if (customUrlInput) customUrlInput.placeholder = T.legalCustomUrlPlaceholder || "";
   applyTheme(getSavedTheme());
   renderSuggestions();
+  const welcomeP = document.getElementById("welcome-description");
+  if (welcomeP) {
+    welcomeP.textContent = getWelcomeText();
+  }
   if (legalCorporaData && legalCorporaData.length > 0) {
     renderLegalCorporaList();
   }
@@ -962,7 +1063,8 @@ function renderWelcome() {
   h2.textContent = T.welcomeTitle;
 
   const p = document.createElement("p");
-  p.textContent = T.welcomeText;
+  p.id = "welcome-description";
+  p.textContent = getWelcomeText();
 
   const sug = document.createElement("div");
   sug.className = "suggestions-grid";
@@ -1133,6 +1235,10 @@ async function send(question) {
   let done = null;
 
   try {
+    localStorage.setItem("conv_assistant_" + currentId, currentProfileId);
+  } catch (_) {}
+
+  try {
     const res = await fetch("/chat/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1225,6 +1331,9 @@ newChatBtn.addEventListener("click", startNewChat);
 
 function startNewChat() {
   currentId = newId();
+  try {
+    localStorage.setItem("conv_assistant_" + currentId, currentProfileId);
+  } catch (_) {}
   currentTurnSources.clear();
   resetInspectorState();
   renderWelcome();
@@ -1253,6 +1362,9 @@ function renderConversations(convs) {
     const item = document.createElement("div");
     item.className = "conv-item";
     item.dataset.id = conv.id;
+    if (conv.assistant_id) {
+      item.dataset.assistantId = conv.assistant_id;
+    }
 
     if (conv.pinned) {
       const pinIcon = document.createElement("span");
@@ -1293,7 +1405,7 @@ function renderConversations(convs) {
     });
 
     item.append(title, pinBtn, renameBtn, delBtn);
-    item.addEventListener("click", () => openConversation(conv.id, conv.title));
+    item.addEventListener("click", () => openConversation(conv.id, conv.title, conv.assistant_id));
     convEl.appendChild(item);
   }
   highlightActive();
@@ -1306,11 +1418,18 @@ async function loadConversations() {
   } catch (_) { /* ignore */ }
 }
 
-async function openConversation(id, title) {
+async function openConversation(id, title, assistantId) {
   if (busy) return;
   currentId = id;
   currentTurnSources.clear();
   resetInspectorState();
+
+  // Restore assistant / domain mode associated with this session
+  const targetAssistantId = assistantId || localStorage.getItem("conv_assistant_" + id);
+  if (targetAssistantId && profiles.some((p) => p.id === targetAssistantId) && targetAssistantId !== currentProfileId) {
+    selectProfile(targetAssistantId);
+  }
+
   if (activeConvTitleEl) {
     activeConvTitleEl.textContent = title || "Conversation";
     activeConvTitleEl.dataset.isCustom = "true";
@@ -1603,9 +1722,6 @@ function selectProfile(id) {
   if (btnLegalCorpora) {
     btnLegalCorpora.style.display = id === "legal" ? "inline-flex" : "none";
   }
-  if (navLegal) {
-    navLegal.style.display = id === "legal" ? "inline-flex" : "none";
-  }
   if (domainDropdownMenu) {
     domainDropdownMenu.querySelectorAll(".domain-item").forEach((item) => {
       const isCurrent = item.dataset.profileId === id;
@@ -1613,6 +1729,11 @@ function selectProfile(id) {
       const checkEl = item.querySelector(".domain-item-check");
       if (checkEl) checkEl.textContent = isCurrent ? "✓" : "";
     });
+  }
+  renderSuggestions();
+  const welcomeP = document.getElementById("welcome-description");
+  if (welcomeP) {
+    welcomeP.textContent = getWelcomeText();
   }
   if (id === "legal") {
     checkAndPromptLegalCorpora();
@@ -1640,39 +1761,105 @@ if (domainDropdownTrigger) {
   });
 }
 
+const BUILTIN_PROFILE_IDS = new Set(["default", "legal", "healthcare", "finance"]);
+
+function createDomainDropdownItem(p, isCustom) {
+  const pName = (p.names && p.names[LANG]) || p.name || p.id;
+  const pDesc = (p.descriptions && p.descriptions[LANG]) || p.description || "";
+  const icon = getDomainIcon(p);
+  const tag = p.domain || (p.id === "legal" ? "legal" : (p.id === "healthcare" ? "medical" : (p.id === "finance" ? "quant" : "trading")));
+
+  const item = document.createElement("div");
+  item.className = "domain-item" + (p.id === currentProfileId ? " active" : "");
+  item.setAttribute("role", "menuitem");
+  item.dataset.profileId = p.id;
+
+  item.innerHTML = `
+    <div class="domain-item-icon">${icon}</div>
+    <div class="domain-item-body">
+      <div class="domain-item-title-row">
+        <span class="domain-item-title">${escapeHtml(pName)}</span>
+        ${isCustom ? `<span class="domain-badge domain-badge-${escapeHtml(tag)}">${escapeHtml(tag)}</span>` : ""}
+      </div>
+      <div class="domain-item-desc">${escapeHtml(pDesc)}</div>
+    </div>
+    ${isCustom ? `<button class="domain-item-edit-btn" type="button" title="${LANG === 'hu' ? 'Asszisztens szerkesztése' : 'Edit Assistant'}">✏️</button>` : ""}
+    <div class="domain-item-check">${p.id === currentProfileId ? "✓" : ""}</div>
+  `;
+
+  if (isCustom) {
+    const editBtn = item.querySelector(".domain-item-edit-btn");
+    if (editBtn) {
+      editBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeDomainDropdown();
+        openProfileEditor(p);
+      });
+    }
+  }
+
+  item.addEventListener("click", () => {
+    selectProfile(p.id);
+    closeDomainDropdown();
+  });
+  return item;
+}
+
 function renderProfilesDropdown() {
   if (profileSelectEl) profileSelectEl.innerHTML = "";
   if (domainDropdownMenu) domainDropdownMenu.innerHTML = "";
 
+  const builtins = profiles.filter((p) => BUILTIN_PROFILE_IDS.has(p.id));
+  const customs = profiles.filter((p) => !BUILTIN_PROFILE_IDS.has(p.id));
+
   for (const p of profiles) {
-    const pName = (p.names && p.names[LANG]) || p.name || p.id;
-    const pDesc = (p.descriptions && p.descriptions[LANG]) || p.description || "";
     if (profileSelectEl) {
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = pName;
+      opt.textContent = (p.names && p.names[LANG]) || p.name || p.id;
       profileSelectEl.appendChild(opt);
     }
+  }
 
-    if (domainDropdownMenu) {
-      const item = document.createElement("div");
-      item.className = "domain-item" + (p.id === currentProfileId ? " active" : "");
-      item.setAttribute("role", "menuitem");
-      item.dataset.profileId = p.id;
-      const icon = getDomainIcon(p);
-      item.innerHTML = `
-        <div class="domain-item-icon">${icon}</div>
-        <div class="domain-item-body">
-          <div class="domain-item-title">${escapeHtml(pName)}</div>
-          <div class="domain-item-desc">${escapeHtml(pDesc)}</div>
-        </div>
-        <div class="domain-item-check">${p.id === currentProfileId ? "✓" : ""}</div>
-      `;
-      item.addEventListener("click", () => {
-        selectProfile(p.id);
-        closeDomainDropdown();
-      });
-      domainDropdownMenu.appendChild(item);
+  if (!domainDropdownMenu) return;
+
+  // 1. Built-in Roles Section
+  const builtInTitle = document.createElement("div");
+  builtInTitle.className = "domain-section-title";
+  builtInTitle.textContent = LANG === "hu" ? "Beépített Asszisztensek" : "Built-in Roles";
+  domainDropdownMenu.appendChild(builtInTitle);
+
+  for (const p of builtins) {
+    domainDropdownMenu.appendChild(createDomainDropdownItem(p, false));
+  }
+
+  // 2. Custom Assistants Section
+  const customTitle = document.createElement("div");
+  customTitle.className = "domain-section-title domain-section-custom";
+  customTitle.innerHTML = `
+    <span>${LANG === "hu" ? "Egyedi Asszisztensek" : "Custom Assistants"}</span>
+    <button class="domain-add-btn" type="button" title="${LANG === "hu" ? "Új egyedi asszisztens létrehozása" : "Create new custom assistant"}">${LANG === "hu" ? "+ Új" : "+ New"}</button>
+  `;
+  const addBtn = customTitle.querySelector(".domain-add-btn");
+  if (addBtn) {
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeDomainDropdown();
+      openProfileEditor(null);
+    });
+  }
+  domainDropdownMenu.appendChild(customTitle);
+
+  if (customs.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "domain-item-empty text-muted";
+    empty.textContent = LANG === "hu"
+      ? "Nincs még egyedi asszisztens. Kattintson a + Új gombra!"
+      : "No custom assistants yet. Click + New to create one!";
+    domainDropdownMenu.appendChild(empty);
+  } else {
+    for (const p of customs) {
+      domainDropdownMenu.appendChild(createDomainDropdownItem(p, true));
     }
   }
 }
@@ -1683,18 +1870,36 @@ async function loadProfiles() {
     if (res.ok) {
       const data = await res.json();
       profiles = data.profiles || [];
+
+      // Check localStorage for any custom assistants not yet registered on server
+      try {
+        const localCustoms = JSON.parse(localStorage.getItem("custom_assistants_backup") || "[]");
+        for (const lc of localCustoms) {
+          if (!profiles.some((p) => p.id === lc.id)) {
+            await fetch("/profiles", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(lc),
+            }).catch(() => {});
+            profiles.push(lc);
+          }
+        }
+      } catch (_) {}
+
       renderProfilesDropdown();
 
       if (!profiles.some((p) => p.id === currentProfileId) && profiles.length > 0) {
         currentProfileId = profiles[0].id;
       }
-      if (navLegal) {
-        navLegal.style.display = currentProfileId === "legal" ? "inline-flex" : "none";
-      }
       if (btnLegalCorpora) {
         btnLegalCorpora.style.display = currentProfileId === "legal" ? "inline-flex" : "none";
       }
       updateActiveDomainTrigger();
+      renderSuggestions();
+      const welcomeP = document.getElementById("welcome-description");
+      if (welcomeP) {
+        welcomeP.textContent = getWelcomeText();
+      }
     }
   } catch (_) { /* ignore */ }
 }
@@ -1712,41 +1917,88 @@ if (profileSelectEl) {
   });
 }
 
-btnProfileConfig.addEventListener("click", () => {
-  const p = profiles.find((x) => x.id === currentProfileId);
+function openProfileEditor(p = null) {
   if (p) {
     profIdEl.value = p.id;
     profIdEl.disabled = true;
     profNameEl.value = (p.names && p.names[LANG]) || p.name || "";
+    if (profDomainEl) {
+      profDomainEl.value = p.domain || (p.id === "legal" ? "legal" : (p.id === "healthcare" ? "medical" : (p.id === "finance" ? "quant" : "trading")));
+    }
     profDescEl.value = (p.descriptions && p.descriptions[LANG]) || p.description || "";
     profPromptEl.value = (p.system_prompts && p.system_prompts[LANG]) || p.system_prompt || "";
     const guards = p.guardrails || {};
     profGuardCitationsEl.checked = Boolean(guards.enforce_citations);
     profGuardPhiEl.checked = Boolean(guards.anonymize_phi);
+    if (profDeleteBtn) {
+      profDeleteBtn.style.display = BUILTIN_PROFILE_IDS.has(p.id) ? "none" : "inline-flex";
+    }
   } else {
     resetProfileForm();
   }
   profStatusEl.textContent = "";
   profStatusEl.className = "status-msg";
   modalProfile.classList.add("show");
-});
+}
 
 function resetProfileForm() {
-  profIdEl.value = "";
+  profIdEl.value = "custom_" + Math.random().toString(36).substring(2, 8);
   profIdEl.disabled = false;
   profNameEl.value = "";
+  if (profDomainEl) profDomainEl.value = "trading";
   profDescEl.value = "";
   profPromptEl.value = "";
   profGuardCitationsEl.checked = false;
   profGuardPhiEl.checked = false;
+  if (profDeleteBtn) profDeleteBtn.style.display = "none";
 }
+
+btnProfileConfig.addEventListener("click", () => {
+  const p = profiles.find((x) => x.id === currentProfileId);
+  openProfileEditor(p);
+});
 
 profCreateNewBtn.addEventListener("click", () => {
   resetProfileForm();
-  profIdEl.focus();
+  profNameEl.focus();
 });
 
 profClose.addEventListener("click", () => modalProfile.classList.remove("show"));
+
+if (profDeleteBtn) {
+  profDeleteBtn.addEventListener("click", async () => {
+    const id = profIdEl.value.trim();
+    if (!id || BUILTIN_PROFILE_IDS.has(id)) return;
+    const confirmMsg = LANG === "hu"
+      ? `Biztosan törölni szeretné a(z) "${profNameEl.value}" asszisztenst?`
+      : `Are you sure you want to delete "${profNameEl.value}" assistant?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    profStatusEl.textContent = LANG === "hu" ? "Törlés folyamatban…" : "Deleting assistant…";
+    profStatusEl.className = "status-msg";
+    try {
+      const res = await fetch(`/profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (res.ok) {
+        try {
+          const stored = JSON.parse(localStorage.getItem("custom_assistants_backup") || "[]");
+          const next = stored.filter((x) => x.id !== id);
+          localStorage.setItem("custom_assistants_backup", JSON.stringify(next));
+        } catch (_) {}
+
+        currentProfileId = "default";
+        modalProfile.classList.remove("show");
+        await loadProfiles();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        profStatusEl.textContent = err.detail || "Failed to delete assistant.";
+        profStatusEl.className = "status-msg error";
+      }
+    } catch (_) {
+      profStatusEl.textContent = "Network error deleting assistant.";
+      profStatusEl.className = "status-msg error";
+    }
+  });
+}
 
 profSaveBtn.addEventListener("click", async () => {
   const id = profIdEl.value.trim();
@@ -1759,6 +2011,7 @@ profSaveBtn.addEventListener("click", async () => {
   const payload = {
     id,
     name,
+    domain: profDomainEl ? profDomainEl.value : "general",
     description: profDescEl.value.trim(),
     system_prompt: profPromptEl.value.trim(),
     guardrails: {
@@ -1766,7 +2019,7 @@ profSaveBtn.addEventListener("click", async () => {
       anonymize_phi: profGuardPhiEl.checked,
     },
   };
-  profStatusEl.textContent = "Saving profile…";
+  profStatusEl.textContent = "Saving assistant…";
   profStatusEl.className = "status-msg";
   try {
     const isExisting = profiles.some((p) => p.id === id);
@@ -1778,17 +2031,26 @@ profSaveBtn.addEventListener("click", async () => {
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      profStatusEl.textContent = "Profile saved successfully!";
+      try {
+        const stored = JSON.parse(localStorage.getItem("custom_assistants_backup") || "[]");
+        const idx = stored.findIndex((x) => x.id === id);
+        if (idx >= 0) stored[idx] = payload;
+        else stored.push(payload);
+        localStorage.setItem("custom_assistants_backup", JSON.stringify(stored));
+      } catch (_) {}
+
+      profStatusEl.textContent = "Assistant saved successfully!";
       profStatusEl.className = "status-msg success";
       currentProfileId = id;
+      modalProfile.classList.remove("show");
       await loadProfiles();
     } else {
       const err = await res.json().catch(() => ({}));
-      profStatusEl.textContent = err.detail || "Failed to save profile.";
+      profStatusEl.textContent = err.detail || "Failed to save assistant.";
       profStatusEl.className = "status-msg error";
     }
   } catch (_) {
-    profStatusEl.textContent = "Network error saving profile.";
+    profStatusEl.textContent = "Network error saving assistant.";
     profStatusEl.className = "status-msg error";
   }
 });
@@ -2682,28 +2944,9 @@ if (btnToggleGraph && docGraphWidget) {
   });
 }
 
-if (navLegal) {
-  navLegal.addEventListener("click", () => {
-    loadLegalCorpora();
-    if (modalLegalCorpus) modalLegalCorpus.classList.add("show");
-  });
-}
-
-if (navSettings) {
-  navSettings.addEventListener("click", () => {
-    if (modalSettings) modalSettings.classList.add("show");
-  });
-}
-
-if (composerDocBtn) {
-  composerDocBtn.addEventListener("click", () => {
-    if (btnToggleInspector) btnToggleInspector.click();
-  });
-}
-
 if (composerPromptBtn) {
   composerPromptBtn.addEventListener("click", () => {
-    const sug = T.suggestions || [];
+    const sug = getActiveSuggestions();
     if (sug.length > 0) {
       const nextSug = sug[Math.floor(Math.random() * sug.length)];
       inputEl.value = nextSug;

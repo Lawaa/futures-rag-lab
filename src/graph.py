@@ -434,6 +434,13 @@ class RetrievalGraph:
         documents = state.get("documents") or []
         if not documents:
             return {"relevant": False}
+
+        pid = self._resolve_profile_id(state)
+        # When querying the legal profile and statutory documents are already retrieved,
+        # accept them directly to prevent grader false-negatives from rewriting exact legal queries.
+        if self._is_legal_profile(pid) and len(documents) >= 1:
+            return {"relevant": True}
+
         verdict = self._grade_chain.invoke(
             {"question": state["question"], "context": _format_context(documents)}
         )

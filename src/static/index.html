@@ -33,17 +33,6 @@
         </button>
       </div>
 
-      <!-- Quick Nav Action Tabs from concept image -->
-      <nav class="sidebar-nav">
-        <button class="sidebar-nav-item" id="nav-legal" type="button" style="display: none;" data-i18n-title="navLegalCodes">
-          <span class="nav-icon">⚖️</span>
-          <span data-i18n="navLegalCodes">Legal Codes</span>
-        </button>
-        <button class="sidebar-nav-item" id="nav-settings" type="button" data-i18n-title="settingsTitle">
-          <span class="nav-icon">⚙️</span>
-          <span data-i18n="settingsTitle">Settings</span>
-        </button>
-      </nav>
 
       <div class="conv-section-label" data-i18n="conversationsLabel">Recent conversations</div>
       <div class="conversations-list custom-scrollbar" id="conversations"></div>
@@ -580,6 +569,16 @@
           <input type="text" id="prof-name" placeholder="e.g. Legal &amp; Compliance Advisor" />
         </div>
         <div class="form-group">
+          <label for="prof-domain" data-i18n="profDomain">Domain Category / Tag</label>
+          <select id="prof-domain" class="form-select">
+            <option value="trading">Trading / Futures</option>
+            <option value="legal">Legal &amp; Regulatory Compliance</option>
+            <option value="medical">Clinical Healthcare &amp; Medical</option>
+            <option value="quant">Quantitative Financial Analysis</option>
+            <option value="general">General Domain</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label for="prof-desc" data-i18n="profDesc">Description (Router summary)</label>
           <input type="text" id="prof-desc" placeholder="Summary of domain scope..." />
         </div>
@@ -599,8 +598,9 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button id="prof-create-new" class="btn-secondary" data-i18n="profBtnNew">+ New Profile</button>
-          <button id="prof-save" class="btn-primary" data-i18n="profBtnSave">Save Profile</button>
+          <button id="prof-delete" class="btn-danger" style="display: none; margin-right: auto;" data-i18n="profBtnDelete">🗑 Delete</button>
+          <button id="prof-create-new" class="btn-secondary" data-i18n="profBtnNew">+ New Assistant</button>
+          <button id="prof-save" class="btn-primary" data-i18n="profBtnSave">Save Assistant</button>
         </div>
         <div id="prof-status" class="status-msg"></div>
       </div>

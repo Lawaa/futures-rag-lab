@@ -91,6 +91,7 @@ class ConversationSummary(BaseModel):
     title: str
     updated_at: str
     pinned: bool = False
+    assistant_id: str | None = "default"
 
 
 class MessageModel(BaseModel):
@@ -151,6 +152,7 @@ class ProfileModel(BaseModel):
     names: dict[str, str] = Field(default_factory=dict)
     description: str = Field(default="")
     descriptions: dict[str, str] = Field(default_factory=dict)
+    domain: str | None = None
     system_prompt: str | None = None
     system_prompts: dict[str, str] = Field(default_factory=dict)
     guardrails: dict[str, Any] = Field(default_factory=dict)
@@ -652,6 +654,7 @@ async def list_profiles(service: ServiceDep) -> ProfileListResponse:
                 names=p.names,
                 description=p.description,
                 descriptions=p.descriptions,
+                domain=getattr(p, "domain", None),
                 system_prompt=p.system_prompt,
                 system_prompts=p.system_prompts,
                 guardrails=p.guardrails,
@@ -670,6 +673,7 @@ async def create_profile(payload: ProfileModel, service: ServiceDep) -> dict[str
         names=payload.names,
         description=payload.description,
         descriptions=payload.descriptions,
+        domain=payload.domain,
         system_prompt=payload.system_prompt,
         system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,
@@ -689,12 +693,22 @@ async def update_profile(
         names=payload.names,
         description=payload.description,
         descriptions=payload.descriptions,
+        domain=payload.domain,
         system_prompt=payload.system_prompt,
         system_prompts=payload.system_prompts,
         guardrails=payload.guardrails,
     )
     service.update_profile(profile)
     return {"status": "updated", "profile_id": profile.id}
+
+
+@app.delete("/profiles/{profile_id}")
+async def delete_profile(profile_id: str, service: ServiceDep) -> dict[str, str]:
+    """Delete a custom domain profile."""
+    if profile_id in ("default", "legal", "healthcare", "finance"):
+        raise HTTPException(status_code=400, detail="Cannot delete built-in profile.")
+    service.delete_profile(profile_id)
+    return {"status": "deleted", "profile_id": profile_id}
 
 
 # --- Legal Corpora Management Endpoints --------------------------------------

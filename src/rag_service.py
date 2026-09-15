@@ -99,6 +99,13 @@ class RagService:
         self._profiles.save_to_disk(self._settings.profiles_path)
         self._answer_chains.clear()
 
+    def delete_profile(self, profile_id: str) -> None:
+        """Delete a profile, persist to disk, and invalidate cached chains."""
+        self._profiles = self._profiles.remove(profile_id)
+        self._profiles.save_to_disk(self._settings.profiles_path)
+        self._answer_chains.clear()
+        self._retrievers.pop(profile_id, None)
+
     def _answer_chain(self, profile_id: str | None) -> Any:
         """Return the cached answer chain for a profile (built on first use)."""
         profile = self._profiles.get(profile_id)
@@ -217,12 +224,14 @@ class RagService:
             "chat_history": self._history(session_id).messages,
         }
 
-    def _remember(self, session_id: str, question: str, answer: str) -> None:
+    def _remember(
+        self, session_id: str, question: str, answer: str, profile_id: str | None = None
+    ) -> None:
         history = self._history(session_id)
         history.add_user_message(question)
         history.add_ai_message(answer)
         if self._store is not None:
-            self._store.append_turn(session_id, question, answer)
+            self._store.append_turn(session_id, question, answer, assistant_id=profile_id)
 
     # -- groundedness (Self-RAG / CRAG) --------------------------------------
     def _candidate_grounding_docs(
@@ -300,7 +309,7 @@ class RagService:
         text, sources, grounded = self._finalize(
             retrieval, sanitized_raw, session_id=session_id
         )
-        self._remember(session_id, question, text)
+        self._remember(session_id, question, text, profile_id=retrieval.profile_id)
         return Answer(text=text, sources=sources, grounded=grounded)
 
     def stream_answer(
@@ -325,7 +334,7 @@ class RagService:
             yield token
         raw = "".join(chunks)
         sanitized = apply_guardrails_to_outputs(raw, profile.guardrails)
-        self._remember(session_id, question, sanitized)
+        self._remember(session_id, question, sanitized, profile_id=retrieval.profile_id)
 
     def stream_events(
         self,
@@ -391,7 +400,7 @@ class RagService:
         if not grounded and text.endswith(sanitized_raw) and len(text) > len(sanitized_raw):
             note = text[: len(text) - len(sanitized_raw)].strip()
 
-        self._remember(session_id, question, text)
+        self._remember(session_id, question, text, profile_id=retrieval.profile_id)
         yield {
             "type": "done",
             "grounded": grounded,

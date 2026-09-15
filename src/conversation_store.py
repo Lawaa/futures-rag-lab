@@ -79,11 +79,12 @@ class ConversationStore:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS conversations (
-                    id         TEXT PRIMARY KEY,
-                    title      TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    pinned     INTEGER NOT NULL DEFAULT 0
+                    id           TEXT PRIMARY KEY,
+                    title        TEXT NOT NULL,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL,
+                    pinned       INTEGER NOT NULL DEFAULT 0,
+                    assistant_id TEXT NOT NULL DEFAULT 'default'
                 );
                 CREATE TABLE IF NOT EXISTS messages (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,15 +112,27 @@ class ConversationStore:
                 "ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL "
                 "DEFAULT 0"
             )
+        if "assistant_id" not in columns:
+            connection.execute(
+                "ALTER TABLE conversations ADD COLUMN assistant_id TEXT NOT NULL "
+                "DEFAULT 'default'"
+            )
 
     # -- writes ---------------------------------------------------------------
-    def append_turn(self, conversation_id: str, question: str, answer: str) -> None:
+    def append_turn(
+        self,
+        conversation_id: str,
+        question: str,
+        answer: str,
+        assistant_id: str | None = None,
+    ) -> None:
         """Append a user question and assistant answer to a conversation.
 
         Creates the conversation (titled from the first question) if it is new,
         refreshes its ``updated_at`` timestamp, and prunes old conversations.
         """
         timestamp = _now()
+        eff_assistant = assistant_id or "default"
         with self._connect() as connection:
             exists = connection.execute(
                 "SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)
@@ -127,15 +140,21 @@ class ConversationStore:
 
             if exists is None:
                 connection.execute(
-                    "INSERT INTO conversations (id, title, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?)",
-                    (conversation_id, _derive_title(question), timestamp, timestamp),
+                    "INSERT INTO conversations (id, title, created_at, updated_at, assistant_id) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (conversation_id, _derive_title(question), timestamp, timestamp, eff_assistant),
                 )
             else:
-                connection.execute(
-                    "UPDATE conversations SET updated_at = ? WHERE id = ?",
-                    (timestamp, conversation_id),
-                )
+                if assistant_id:
+                    connection.execute(
+                        "UPDATE conversations SET updated_at = ?, assistant_id = ? WHERE id = ?",
+                        (timestamp, eff_assistant, conversation_id),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                        (timestamp, conversation_id),
+                    )
 
             connection.executemany(
                 "INSERT INTO messages (conversation_id, role, content, created_at) "
@@ -212,7 +231,7 @@ class ConversationStore:
         """Return recent conversations, pinned first then most recently updated."""
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, title, updated_at, pinned FROM conversations "
+                "SELECT id, title, updated_at, pinned, assistant_id FROM conversations "
                 "ORDER BY pinned DESC, updated_at DESC, id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
@@ -222,6 +241,7 @@ class ConversationStore:
                 "title": row["title"],
                 "updated_at": row["updated_at"],
                 "pinned": bool(row["pinned"]),
+                "assistant_id": row["assistant_id"] if "assistant_id" in row.keys() and row["assistant_id"] else "default",
             }
             for row in rows
         ]

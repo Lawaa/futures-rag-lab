@@ -286,6 +286,13 @@ class LegalCorpusManager:
         if exists and not force:
             is_same, _, _ = self._probe_remote_headers(info["url"], etag, last_mod)
             if is_same or (etag is None and last_mod is None):
+                try:
+                    from .vector_store import build_vector_store
+                    vs = build_vector_store(self._settings, profile_id="legal")
+                    if vs._collection.count() == 0:
+                        ingest_file_to_vector_db(file_path, self._settings, profile_id="legal")
+                except Exception as err:
+                    logger.debug("Vector store check for %s: %s", corpus_id, err)
                 logger.info("Corpus '%s' is up-to-date in cache (%s).", corpus_id, file_path.name)
                 return file_path
 

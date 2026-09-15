@@ -146,6 +146,7 @@ def test_list_conversations() -> None:
             "title": "Margin basics",
             "updated_at": "2026-01-01",
             "pinned": True,
+            "assistant_id": "default",
         }
     ]
 

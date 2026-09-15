@@ -11,7 +11,9 @@
       "en": "General trading knowledge base covering contracts, margins, settlement, and market mechanisms.",
       "hu": "Általános kereskedési ismeretek, határidős szerződések, letétek, elszámolás és piaci mechanizmusok."
     },
+    "domain": null,
     "system_prompt": "You are an expert Futures Trading Assistant.",
+    "system_prompts": {},
     "guardrails": {
       "enforce_citations": false,
       "anonymize_phi": false
@@ -29,6 +31,7 @@
       "en": "Regulatory compliance, statutory codes (Ptk., Btk.), contracts, liability, and governance.",
       "hu": "Magyar polgári és büntető jogszabályok, törvénykönyvek (Ptk., Btk.), megfelelőségi ellenőrzések és jogi kötelezettségek."
     },
+    "domain": null,
     "system_prompt": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
     "system_prompts": {
       "en": "You are an authoritative Legal & Regulatory Compliance Counsel. Provide rigorous legal analyses, cite governing statutory frameworks and contractual clauses, and clarify legal rights, obligations, liability boundaries, and statutory implications.",
@@ -51,7 +54,9 @@
       "en": "Medical policies, clinical procedures, patient privacy, and healthcare administration guidelines.",
       "hu": "Egészségügyi irányelvek, klinikai eljárások, betegadatok védelme és orvosi szabályozás."
     },
+    "domain": null,
     "system_prompt": "You are an expert Clinical Healthcare Assistant and medical policy advisor. Deliver clear, evidence-based clinical guidance while strictly observing medical protocol rigor and patient privacy boundaries.",
+    "system_prompts": {},
     "guardrails": {
       "enforce_citations": true,
       "anonymize_phi": true
@@ -69,9 +74,25 @@
       "en": "Derivatives pricing, volatility surfaces, Greeks modeling, hedging algorithms, and risk analytics.",
       "hu": "Derivatív árazás, volatilitási modellek, görögök (Greeks), fedezeti stratégiák és kockázatelemzés."
     },
+    "domain": null,
     "system_prompt": "You are an expert Quantitative Financial Analyst and Risk Strategist. Formulate structured quantitative breakdowns, stress-test calculations, and precision hedge strategies.",
+    "system_prompts": {},
     "guardrails": {
       "enforce_citations": false,
+      "anonymize_phi": false
+    }
+  },
+  {
+    "id": "custom_h23rea",
+    "name": "Rímelő",
+    "names": {},
+    "description": "Rímelő",
+    "descriptions": {},
+    "domain": "general",
+    "system_prompt": "válaszolj rímekben",
+    "system_prompts": {},
+    "guardrails": {
+      "enforce_citations": true,
       "anonymize_phi": false
     }
   }
